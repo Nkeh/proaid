@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProAid Cameroon
 
-## Getting Started
+A clickable MVP demo of ProAid — a marketplace connecting employers in Douala with vetted care
+providers (nannies, house help, personal cooks, elderly caregivers, housemate support).
 
-First, run the development server:
+This is a **pitch demo**: there is no backend. All data is seeded sample data persisted to the
+browser's `localStorage`. See [`CLAUDE.md`](./CLAUDE.md) for the fee model, booking lifecycle,
+and architecture, and [`docs/ROADMAP.md`](./docs/ROADMAP.md) for what each simulated piece is
+replaced with once real backend work starts.
+
+## Run locally
+
+Requires Node.js 20+.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). The login page offers three role buttons
+(Employer / Care Provider / Admin) — no real credentials are required, this is a simulated login.
+A floating **Demo** button (bottom-right, or `Shift+D`) opens a control panel to switch roles
+instantly, fast-forward a monthly contract to month 6, or reset the seeded demo data.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dev      # start the dev server (Turbopack)
+npm run build    # production build — must pass with zero TypeScript/lint errors
+npm run start    # run the production build
+npm run lint     # ESLint
+npm run test     # Vitest (fee calculation unit tests)
+```
 
-## Learn More
+## Deploy
 
-To learn more about Next.js, take a look at the following resources:
+This app has no environment variables, no database, and no API keys — it deploys to
+[Vercel](https://vercel.com) with zero configuration:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx vercel deploy
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+or connect the repository in the Vercel dashboard and deploy directly; the default
+`next build` command and Node.js runtime work as-is.
