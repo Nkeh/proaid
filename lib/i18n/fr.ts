@@ -379,7 +379,7 @@ export const fr: Dictionary = {
     resetButton: "Réinitialiser",
     cancelButton: "Annuler",
     shortcutHint: "Maj + D",
-    openPanel: "Démo",
+    openPanel: "Changer",
     goButton: "Lancer",
     noEligibleBookings: "Aucune réservation mensuelle éligible pour le moment.",
     selectBookingPlaceholder: "Sélectionner une réservation",

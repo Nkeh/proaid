@@ -379,7 +379,7 @@ export const en: Dictionary = {
     resetButton: "Reset",
     cancelButton: "Cancel",
     shortcutHint: "Shift + D",
-    openPanel: "Demo",
+    openPanel: "Switch",
     goButton: "Go",
     noEligibleBookings: "No eligible monthly bookings yet.",
     selectBookingPlaceholder: "Select a booking",
