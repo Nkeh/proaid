@@ -61,7 +61,7 @@ export default function ContractPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <div className="mb-4 flex items-center justify-between print:hidden">
-        <Button variant="ghost" className="gap-2" onClick={() => router.push(`/booking/${booking.id}`)}>
+        <Button variant="ghost" className="gap-2" onClick={() => router.push(`/demo/booking/${booking.id}`)}>
           <ArrowLeft className="h-4 w-4" />
           {t.contract.backToBooking}
         </Button>

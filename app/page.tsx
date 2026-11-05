@@ -95,7 +95,7 @@ export default function LandingPage() {
                 size="lg"
                 className="h-12 px-6 text-base"
                 nativeButton={false}
-                render={<Link href="/search" />}
+                render={<Link href="/demo/search" />}
               >
                 <Search className="h-4 w-4" />
                 {t.landing.ctaFindProvider}
@@ -105,7 +105,7 @@ export default function LandingPage() {
                 variant="outline"
                 className="h-12 px-6 text-base"
                 nativeButton={false}
-                render={<Link href="/login" />}
+                render={<Link href="/demo/login" />}
               >
                 {t.landing.ctaBecomeProvider}
               </Button>
@@ -141,7 +141,7 @@ export default function LandingPage() {
           {CATEGORY_OPTIONS.map((cat) => {
             const Icon = CATEGORY_ICONS[cat];
             return (
-              <Link key={cat} href={`/search?category=${cat}`}>
+              <Link key={cat} href={`/demo/search?category=${cat}`}>
                 <Card className="flex h-full flex-col items-center gap-3 p-6 text-center transition-shadow hover:shadow-md">
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Icon className="h-6 w-6" />

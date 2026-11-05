@@ -27,7 +27,7 @@ import { useAllProviders } from "@/lib/data/providers";
 import { useT } from "@/lib/i18n";
 
 /** Pages that make sense for more than one role - the demo panel keeps the user here on a role switch. Everything else redirects to the new role's home. */
-const SHARED_PATH_PREFIXES = ["/booking/", "/search", "/provider/"];
+const SHARED_PATH_PREFIXES = ["/demo/booking/", "/demo/search", "/demo/provider/"];
 
 function isSharedPath(pathname: string): boolean {
   return SHARED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -60,8 +60,6 @@ export function DemoPanel() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
-
-  if (pathname === "/") return null;
 
   function providerName(providerId: string) {
     return providers.find((p) => p.id === providerId)?.name ?? providerId;

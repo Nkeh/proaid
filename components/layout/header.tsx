@@ -24,19 +24,19 @@ export function Header() {
   const navLinks: { href: string; label: string }[] = [];
   if (role === "EMPLOYER") {
     navLinks.push(
-      { href: "/employer", label: t.nav.dashboard },
-      { href: "/search", label: t.nav.search },
-      { href: "/wallet", label: t.nav.wallet }
+      { href: "/demo/employer", label: t.nav.dashboard },
+      { href: "/demo/search", label: t.nav.search },
+      { href: "/demo/wallet", label: t.nav.wallet }
     );
   } else if (role === "PROVIDER") {
-    navLinks.push({ href: "/provider-dashboard", label: t.nav.dashboard });
+    navLinks.push({ href: "/demo/provider-dashboard", label: t.nav.dashboard });
   } else if (role === "ADMIN") {
-    navLinks.push({ href: "/admin", label: t.nav.admin });
+    navLinks.push({ href: "/demo/admin", label: t.nav.admin });
   }
 
   function handleLogout() {
     setRole(null);
-    router.push("/login");
+    router.push("/demo/login");
   }
 
   return (
@@ -81,7 +81,7 @@ export function Header() {
               size="sm"
               className="hidden sm:inline-flex"
               nativeButton={false}
-              render={<Link href="/login" />}
+              render={<Link href="/demo/login" />}
             >
               {t.nav.login}
             </Button>

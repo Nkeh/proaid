@@ -84,7 +84,7 @@ export default function BookingDetailPage() {
   function handleFundClick() {
     if (wallet.balance < booking!.amount) {
       toast.error(t.wallet.insufficientFunds);
-      router.push("/wallet");
+      router.push("/demo/wallet");
       return;
     }
     setFundModalOpen(true);
@@ -163,7 +163,7 @@ export default function BookingDetailPage() {
               )}
 
               {canTransition(bookingLike, "SIGN") && (
-                <Button variant="outline" nativeButton={false} render={<Link href={`/booking/${booking.id}/contract`} />}>
+                <Button variant="outline" nativeButton={false} render={<Link href={`/demo/booking/${booking.id}/contract`} />}>
                   {t.bookingDetail.goToContractButton}
                 </Button>
               )}
@@ -219,7 +219,7 @@ export default function BookingDetailPage() {
                   {provider.name} {booking.providerSignature.signed ? "✓" : "—"}
                 </span>
               </div>
-              <Button variant="outline" className="w-full" nativeButton={false} render={<Link href={`/booking/${booking.id}/contract`} />}>
+              <Button variant="outline" className="w-full" nativeButton={false} render={<Link href={`/demo/booking/${booking.id}/contract`} />}>
                 {t.contract.title}
               </Button>
             </CardContent>

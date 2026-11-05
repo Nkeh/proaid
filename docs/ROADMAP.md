@@ -1,5 +1,8 @@
 # ProAid — Post-Pitch Roadmap
 
+> Superseded by `docs/DEVELOPMENT_PLAN.md`. Kept for history; the fee and booking reuse claims
+> below no longer apply.
+
 This MVP is a fully clickable demo built on seeded, in-browser data (`localStorage` via
 Zustand) so it can be built, tested, and polished without a backend before the pitch. This
 document maps every simulated piece of the demo to the real system that replaces it, and to the

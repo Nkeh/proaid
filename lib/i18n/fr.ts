@@ -369,6 +369,7 @@ export const fr: Dictionary = {
     newRequest: (name) => `Nouvelle demande de réservation de ${name}`,
   },
   demo: {
+    bannerText: "Démo de présentation : données fictives.",
     panelTitle: "Panneau de démonstration",
     switchRole: "Changer de rôle",
     fastForward: "Avancer jusqu'au mois 6",

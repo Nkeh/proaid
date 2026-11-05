@@ -1,164 +1,155 @@
-# ProAid Cameroon — Project Context
+# ProAid Cameroon — Rulebook
 
-ProAid is an online marketplace connecting **Employers** (families/professionals/expatriates in
-Douala) with vetted **Care Providers** (nannies, house help/cleaners, personal cooks, elderly
-caregivers, housemate support). This repository is a **pitch-demo MVP**: fully clickable, fully
-bilingual (EN/FR), with realistic simulated data and payments, but **no real backend**.
+ProAid is an online marketplace connecting **Employers** with vetted **Service Providers**
+(nannies, house help/cleaners, cooks, elderly caregivers, housemate support) in Cameroon. This
+file is the permanent rulebook for building the real Release 1 platform. It does not restate the
+requirements or the build order — those live in:
 
-Real backend work (Postgres, real auth, real MoMo/Orange Money integration, document storage,
-etc.) starts after the pitch — see `docs/ROADMAP.md` for exactly what each simulated piece will
-be replaced with and which SRS requirement it maps to.
+- **`docs/SRS_v2.0.md`** — the Software Requirements Specification. Source of truth for *what*
+  to build. Requirement IDs (`FR-PAY-06`, `BR-LOY-5`, section numbers like `§7.3`) referenced
+  throughout this file and in code come from this document.
+- **`docs/DEVELOPMENT_PLAN.md`** — the target folder structure, tech stack, the 14-iteration
+  build order with SRS IDs mapped to each, and the cross-cutting decisions (business clock, API
+  shape, audit log, notifications, rate limiting) that every iteration must honor.
+- **`docs/ITERATION_X.md`** — one report per completed iteration (see "Reporting," below).
+- **`docs/ROADMAP.md`** — historical record of what the original pitch demo simulated and what
+  replaces it. Superseded by `DEVELOPMENT_PLAN.md` for anything about sequencing; kept for
+  history.
 
-## Critical rule: all money goes through `lib/fees.ts`
+Where this file and the SRS disagree about a rule, the SRS wins and this file should be
+corrected.
 
-**Never compute a fee, a provider payout, or a platform-fee total inline in a component.**
-Every screen that displays money derived from a booking amount must call
-`calculateFee({ contractType, amount, monthNumber })` from `lib/fees.ts` and use its returned
-`feeAmount` / `providerAmount`. This is the single source of truth for the fee model and is
-covered by exact-value unit tests in `lib/fees.test.ts` — if the fee model ever changes, change
-it there and nowhere else.
+## The demo lives at `/demo` and must never break
 
-### The fee model (exact)
+Everything under `app/demo/`, `store/useAppStore.ts`, and `lib/data/*.ts` is the original pitch
+demo: client-only, seeded, persisted to `localStorage`, no real backend. It exists to be
+clickable for sales purposes and is **frozen** — do not extend it with new SRS features, and do
+not let real-platform work regress it. The one planned exception is **Iteration 1B**, which
+updates the demo's fee/loyalty display to call the real `src/domain` engine once it exists, so
+the demo stops showing the superseded 13%/10% fee model; that iteration changes the demo's
+*inputs*, never its storage model.
 
-- **Short-term / one-time bookings**: a flat **13%** fee, charged once.
-- **Monthly contracts**: **13%** of that month's salary for months 1–5, **10%** from month 6
-  onward. The fee rate is a function of `monthNumber`, not of the contract as a whole — a
-  12-month contract pays 13% for months 1–5 and 10% for months 6–12.
-- The provider always receives `amount - feeAmount`.
-- All amounts are rounded to the nearest whole XAF.
+The public landing page (`app/page.tsx`, `app/layout.tsx`) is the real site's home page, not part
+of the demo, and is not gated behind demo-store hydration.
 
-```ts
-calculateFee({ contractType: "MONTHLY", amount: 150_000, monthNumber: 1 })
-// → { feeRate: 0.13, feeAmount: 19_500, providerAmount: 130_500 }
+Every iteration's manual test plan must include clicking through `/demo` end to end
+(login → dashboard → search → provider profile → book → contract → wallet; the floating demo
+panel's role switch, fast-forward, and reset) to confirm nothing broke.
 
-calculateFee({ contractType: "MONTHLY", amount: 150_000, monthNumber: 6 })
-// → { feeRate: 0.10, feeAmount: 15_000, providerAmount: 135_000 }
+## Git — read-only, always
 
-calculateFee({ contractType: "SHORT_TERM", amount: 100_000, monthNumber: 1 })
-// → { feeRate: 0.13, feeAmount: 13_000, providerAmount: 87_000 }
+Only read-only git commands are allowed: `git status`, `git diff`, `git log` (and similarly
+inspect-only commands). **Never** run `git commit`, `git push`, `git reset`, `git rebase`,
+`git checkout` of another branch, `git stash`, or any other command that changes history or the
+remote. The owner commits manually after reviewing each iteration's diff. If a change feels like
+it needs a commit to be "finished," it doesn't — stop there and let the report stand in for it.
+
+## Database and secrets
+
+- Never run a migration or a seed script against any database other than the one named by
+  `DATABASE_URL` in `.env.local`. Never point a migration at staging or production from this
+  environment.
+- Never print or commit a secret. Never commit `.env.local` or any file containing a real
+  credential.
+- Keep `.env.example` current: every environment variable the app reads must have an entry there
+  with a one-line comment explaining what it's for. Add the entry in the same change that
+  introduces the variable.
+
+## Scope discipline
+
+Stay strictly inside the current iteration's scope, as defined by `docs/DEVELOPMENT_PLAN.md`. If
+finishing the iteration properly seems to need something outside that scope — a dependency
+bump, a schema change for a later iteration's entity, a fix to unrelated code — **do not do it**.
+List it in the iteration's report instead, with enough detail that it can be picked up
+deliberately later.
+
+## Every iteration ends green
+
+Before an iteration is considered done, all four of these must pass:
+
+```
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-## Booking lifecycle state machine (`lib/booking.ts`)
+## Reporting — `docs/ITERATION_X.md`
 
-```
-REQUESTED
-  → ACCEPTED        (provider accepts)
-  → DECLINED         (provider declines)
+Every iteration, including this restructuring pass (`docs/ITERATION_0.md`), ends with a report
+at `docs/ITERATION_X.md` containing:
 
-ACCEPTED
-  → CONTRACT_SIGNED  (both employer and provider have signed)
+- Summary of changes
+- Files added / changed
+- New dependencies, and why each was added
+- New environment variables (cross-reference `.env.example`)
+- Database migrations added
+- How to test manually, step by step
+- Known limitations
+- A suggested one-line commit message (the owner commits it themselves — see Git, above)
 
-CONTRACT_SIGNED
-  → FUNDED           (employer pays the current month/job into escrow via simulated MoMo)
+## Money, domain logic, and state
 
-FUNDED
-  → SERVICE_CONFIRMED (employer confirms the work was done; escrow splits and releases:
-                        provider payout + platform fee, recorded as wallet transactions)
+- **All money is integer XAF.** Never use floating point for money, anywhere, for any reason.
+  Round to the nearest whole XAF, half rounding up, exactly where the SRS specifies (BR-FEE-2).
+- **All fee, loyalty, payment-schedule, and state-machine logic lives in `src/domain`** as pure,
+  framework-free TypeScript — no Next.js imports, no I/O, no reading the system clock directly
+  (see Cross-cutting decisions). `src/domain` is the *only* place these rules are implemented;
+  every screen, API handler, and background job calls into it rather than recomputing anything.
+  Every file in `src/domain` has a paired `*.test.ts`, and per NFR 6.6 this layer has 100% branch
+  coverage, including every worked example in SRS Appendix B.
+- Import domain code via the `@/src/domain/...` path alias.
 
-SERVICE_CONFIRMED
-  → next month, status returns to FUNDED-pending (awaiting the next month's funding)
-    for MONTHLY contracts until the final month, then → COMPLETED
-  → COMPLETED directly for SHORT_TERM contracts
+## Open decisions (SRS §11)
 
-COMPLETED
-  → employer can leave a review, which updates the provider's aggregate rating
+Use the SRS's stated default for every open decision until the founders record a different
+choice, and keep each one configurable or isolated so a later change doesn't require a rework.
 
-Any state before FUNDED
-  → employer can CANCEL
-```
+- **OD-01** (loyalty counting when an employer has two or more long contracts active in the same
+  calendar month): **count once per calendar month** — this is BR-LOY-2's explicit default, and
+  is what gets implemented. (`docs/ITERATION_0.md` has a note on a transcription error found in
+  the markdown copy of the SRS §11 table for this row — the table cell briefly read differently
+  from BR-LOY-2's prose; implementation follows BR-LOY-2.)
+- All other OD-02 through OD-13 defaults: implement exactly as stated in SRS §11, each behind a
+  configuration value or an isolated code path, not hardcoded inline.
 
-State transitions are validated by `canTransition()` / `nextStatus()` in `lib/booking.ts`, which
-operate on a flat `BookingLike` shape. The actual `Booking` domain type nests signatures as
-`{ signed, ... }` objects, so every call site converts with `toBookingLike()` before calling into
-the state machine — see `store/useAppStore.ts` for the canonical usage. The UI never renders a
-transition that `canTransition()` rejects; invalid transitions are structurally impossible, not
-just hidden.
+## Cross-cutting decisions (full version in `docs/DEVELOPMENT_PLAN.md`)
 
-## Data layer
-
-There is no backend. All seed data lives in `lib/data/seed.ts` and all runtime state (bookings,
-wallet, notifications, provider verification status, language, current role) lives in a single
-Zustand store (`store/useAppStore.ts`) persisted to `localStorage` via the `persist` middleware.
-
-Pages and components **never** touch `useAppStore` or `localStorage` directly for reads — they go
-through the repository layer in `lib/data/` (`providers.ts`, `bookings.ts`, `wallet.ts`,
-`notifications.ts`, `admin.ts`, `session.ts`), which exposes typed hooks (`useProviders`,
-`useAllBookings`, `useWallet`, …) and action functions (`createBooking`, `updateBooking`, …).
-This indirection is what lets the real backend swap (Postgres + API routes) land in two days
-without touching a single page — only `lib/data/*.ts` changes.
-
-Because the store is only readable client-side, hydration is handled explicitly:
-`skipHydration: true` + a manual `rehydrate()` call in a mount-only effect, gated by a
-`hasHydrated` flag and `HydrationGate`. Never read `localStorage` during render or in a
-Server Component.
+- **Business clock.** `src/domain` never calls `Date.now()` or `new Date()` with no arguments —
+  every function takes the dates it needs as parameters. From Iteration 2, a single server
+  `Clock` service is the one place anything server-side reads "now" from.
+- **API shape.** From Iteration 3, every feature's operations are exposed as versioned REST
+  handlers under `app/api/v1` with Zod request/response schemas (the Release 2 mobile app
+  depends on this — SRS §2.5). Server Actions may call the same underlying service functions but
+  must never contain business logic the API doesn't also expose.
+- **Audit log.** An append-only audit writer exists from Iteration 3; by Iteration 13 it covers
+  every staff action and every change to money, contracts, vetting, and configuration
+  (FR-ADM-08). It cannot be edited or deleted, ever — corrections are new entries, never
+  mutations.
+- **Notifications.** A notification outbox table exists from Iteration 2. Anything that needs to
+  notify a user before the notifications feature (Iteration 12) exists writes to the outbox
+  instead of sending anything directly.
+- **Rate limiting.** State lives in Postgres, never in server memory — hosting is serverless and
+  instances share nothing.
 
 ## Internationalization
 
-Every user-facing string goes through the dictionary (`lib/i18n/en.ts` / `lib/i18n/fr.ts`,
-typed by a shared `Dictionary` interface in `lib/i18n/dictionary.ts`) and the `useT()` hook.
-The active language lives in the Zustand store, not in the URL — there is no locale routing.
-Longer freeform content (provider bios, skills, reviews, seed chat messages) is stored as
-parallel `xFr` fields or `.en`/`.fr` sub-objects directly on the seed data, not routed through
-the dictionary.
-
-Money is formatted with `lib/format.ts`'s `formatMoney(amount, locale)`:
-`"150,000 XAF"` in English, `"150 000 XAF"` in French. Always use it — never interpolate a raw
+Every user-facing string, on every page added for the real platform, exists in English and
+French from the moment it ships — not as a follow-up. Follow the existing pattern: a typed
+`Dictionary` interface (`lib/i18n/dictionary.ts`) implemented by `en.ts` and `fr.ts`, read through
+`useT()`. Money is formatted with `lib/format.ts`'s `formatMoney()` — never interpolate a raw
 number into user-facing text.
 
-## Folder structure
+## Carried-over stack notes (still true, still apply to `/demo` and to new code)
 
-```
-app/                      Next.js App Router pages (all 'use client' — see below)
-  page.tsx                 Landing page
-  login/                    Role-select + demo login
-  employer/                 Employer dashboard
-  search/                   Provider search + filters
-  provider/[id]/             Provider profile
-  book/[id]/                 Booking request form
-  booking/[id]/               Booking detail (lifecycle, payment, messages)
-  booking/[id]/contract/       Generated employment agreement, signing, print view
-  wallet/                   Employer wallet + transaction history
-  provider-dashboard/      Care provider's own dashboard
-  admin/                    Admin KPIs, charts, vetting queue, all bookings
-
-components/
-  ui/                       shadcn/ui primitives (Base UI, not Radix — see below)
-  providers/, booking/, contract/, payment/, wallet/, admin/, notifications/, layout/, demo/, brand/
-                             Feature components, one folder per domain
-
-lib/
-  fees.ts, fees.test.ts     THE fee model (see above)
-  booking.ts                 Booking lifecycle state machine
-  format.ts                  Money/date formatting helpers
-  data/                       Repository layer + domain types + seed data
-  i18n/                       Dictionaries + useT()
-  hooks/                      useRequireRole / useRequireAnyRole route guards
-
-store/useAppStore.ts        The single Zustand store (all mutations live here)
-docs/ROADMAP.md             What's simulated vs. what replaces it post-pitch
-```
-
-## Stack notes worth knowing before touching this code
-
-- **Next.js 16 / App Router / Turbopack.** `params`/`searchParams` are async in Server
-  Component page props in this version — sidestepped entirely because every page is
-  `'use client'` (they all read the Zustand store) and uses the `useParams()` hook instead.
-- **shadcn/ui is installed on Base UI, not Radix.** Polymorphic composition uses
-  `render={<Element />}` (not `asChild`). `Button` needs `nativeButton={false}` when rendered
-  as a non-`<button>` element (e.g. a `Link`).
+- **Next.js 16 / App Router.** `params`/`searchParams` are async in Server Component page props
+  in this version.
+- **shadcn/ui is on Base UI, not Radix.** Polymorphic composition uses `render={<Element />}`
+  (not `asChild`). `Button` needs `nativeButton={false}` when rendered as a non-`<button>`
+  element (e.g. a `Link`).
 - **Tailwind v4**, CSS-first config in `app/globals.css` (`@theme inline`) — there is no
   `tailwind.config.js`.
 - **Zustand selectors must never allocate.** A selector that does `.filter()/.map()/.sort()`
-  inline will break `useSyncExternalStore`'s snapshot caching ("getSnapshot should be cached").
-  Select the raw array, then `useMemo` the derived result.
-- **Route guarding is client-side only** (`useRequireRole`/`useRequireAnyRole`), since there is
-  no server session. On a role mismatch they redirect to the *current* role's own home
-  (`ROLE_HOME`), not unconditionally to `/login` — this matters because the Demo panel's role
-  switch updates the store and navigates in the same tick, and both redirects must agree on a
-  destination.
-- **Authentication is fully simulated.** `/login` has three role buttons and a normal-looking
-  email/password form that always logs into the same demo employer account. There is no
-  password check and no server session — do not add one without reading `docs/ROADMAP.md` first.
-- **MoMo payments are simulated** (`components/payment/momo-modal.tsx`): provider choice,
-  phone-number validation, a 3s fake "approve on your phone" delay, a fake transaction
-  reference. Clearly labeled "Simulated payment (demo mode)" everywhere it appears.
+  inline breaks `useSyncExternalStore`'s snapshot caching. Select the raw array, then `useMemo`
+  the derived result. (Applies to `/demo`'s store; the real platform does not use Zustand for
+  server data — see `docs/DEVELOPMENT_PLAN.md`.)

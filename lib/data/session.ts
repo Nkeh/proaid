@@ -4,9 +4,9 @@ import type { Employer, Role } from "./types";
 export { CURRENT_EMPLOYER_ID, CURRENT_PROVIDER_ID };
 
 export const ROLE_HOME: Record<Role, string> = {
-  EMPLOYER: "/employer",
-  PROVIDER: "/provider-dashboard",
-  ADMIN: "/admin",
+  EMPLOYER: "/demo/employer",
+  PROVIDER: "/demo/provider-dashboard",
+  ADMIN: "/demo/admin",
 };
 
 export function useRole(): Role | null {

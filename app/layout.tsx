@@ -1,13 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { StoreHydration } from "@/components/providers/store-hydration";
-import { HydrationGate } from "@/components/providers/hydration-gate";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { DemoPanel } from "@/components/demo/demo-panel";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -32,16 +28,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <StoreHydration />
-        <HydrationGate>
-          <TooltipProvider>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <DemoPanel />
-            <Toaster position="top-center" />
-          </TooltipProvider>
-        </HydrationGate>
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+        <Toaster position="top-center" />
       </body>
     </html>
   );

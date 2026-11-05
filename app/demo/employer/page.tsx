@@ -25,7 +25,7 @@ function BookingRow({ booking }: { booking: Booking }) {
 
   return (
     <Link
-      href={`/booking/${booking.id}`}
+      href={`/demo/booking/${booking.id}`}
       className="flex items-center gap-3 rounded-xl border border-border p-4 transition-colors hover:bg-secondary/40"
     >
       <InitialsAvatar initials={provider.initials} color={provider.avatarColor} />
@@ -51,7 +51,7 @@ export default function EmployerDashboardPage() {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    router.push(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
+    router.push(query ? `/demo/search?q=${encodeURIComponent(query)}` : "/demo/search");
   }
 
   return (
@@ -124,7 +124,7 @@ export default function EmployerDashboardPage() {
           {recommended.map((p) => (
             <Link
               key={p.id}
-              href={`/provider/${p.id}`}
+              href={`/demo/provider/${p.id}`}
               className="flex flex-col items-center gap-2 rounded-xl border border-border p-4 text-center transition-colors hover:bg-secondary/40"
             >
               <InitialsAvatar initials={p.initials} color={p.avatarColor} size="lg" />

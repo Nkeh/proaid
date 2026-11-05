@@ -40,10 +40,10 @@ export default function ProviderProfilePage() {
 
   function handleBook() {
     if (!role) {
-      router.push("/login");
+      router.push("/demo/login");
       return;
     }
-    router.push(`/book/${provider!.id}`);
+    router.push(`/demo/book/${provider!.id}`);
   }
 
   return (
@@ -174,7 +174,7 @@ export default function ProviderProfilePage() {
         </CardContent>
       </Card>
 
-      <Link href="/search" className="inline-block text-sm font-medium text-primary hover:underline">
+      <Link href="/demo/search" className="inline-block text-sm font-medium text-primary hover:underline">
         &larr; {t.search.title}
       </Link>
     </div>

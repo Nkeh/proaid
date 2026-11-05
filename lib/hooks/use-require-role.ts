@@ -6,9 +6,9 @@ import { ROLE_HOME, useRole } from "@/lib/data/session";
 import type { Role } from "@/lib/data/types";
 
 /**
- * Redirects to /login if no role is set, or to that role's own home if it doesn't
+ * Redirects to /demo/login if no role is set, or to that role's own home if it doesn't
  * match `required`. Redirecting to the current role's home (rather than always to
- * /login) matters because the Demo panel's role switch updates the store and
+ * /demo/login) matters because the Demo panel's role switch updates the store and
  * navigates in the same tick - whichever page is still mounted when the role
  * changes must land somewhere consistent with that navigation, not force a
  * re-login.
@@ -19,7 +19,7 @@ export function useRequireRole(required: Role): Role | null {
 
   useEffect(() => {
     if (role === null) {
-      router.replace("/login");
+      router.replace("/demo/login");
     } else if (role !== required) {
       router.replace(ROLE_HOME[role]);
     }
@@ -28,14 +28,14 @@ export function useRequireRole(required: Role): Role | null {
   return role === required ? role : null;
 }
 
-/** Redirects to /login if no role is set at all (used on pages shared across roles). */
+/** Redirects to /demo/login if no role is set at all (used on pages shared across roles). */
 export function useRequireAnyRole(): Role | null {
   const role = useRole();
   const router = useRouter();
 
   useEffect(() => {
     if (!role) {
-      router.replace("/login");
+      router.replace("/demo/login");
     }
   }, [role, router]);
 

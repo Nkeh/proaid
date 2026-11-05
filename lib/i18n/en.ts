@@ -369,6 +369,7 @@ export const en: Dictionary = {
     newRequest: (name) => `New booking request from ${name}`,
   },
   demo: {
+    bannerText: "Pitch demo: sample data.",
     panelTitle: "Demo control panel",
     switchRole: "Switch role",
     fastForward: "Fast-forward to month 6",

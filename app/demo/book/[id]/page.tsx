@@ -55,7 +55,7 @@ export default function BookingFormPage() {
       notes,
     });
     toast.success(t.bookingForm.successToast);
-    router.push(`/booking/${bookingId}`);
+    router.push(`/demo/booking/${bookingId}`);
   }
 
   return (

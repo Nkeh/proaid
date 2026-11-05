@@ -43,7 +43,7 @@ export function ProviderCard({ provider }: { provider: Provider }) {
           </p>
         </div>
         <Link
-          href={`/provider/${provider.id}`}
+          href={`/demo/provider/${provider.id}`}
           className="flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
         >
           {t.providerCard.viewProfile}

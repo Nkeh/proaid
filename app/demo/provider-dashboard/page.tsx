@@ -122,7 +122,7 @@ export default function ProviderDashboardPage() {
             active.map((b) => (
               <Link
                 key={b.id}
-                href={`/booking/${b.id}`}
+                href={`/demo/booking/${b.id}`}
                 className="flex items-center justify-between rounded-xl border border-border p-4 hover:bg-secondary/40"
               >
                 <div>

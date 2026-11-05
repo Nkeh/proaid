@@ -363,6 +363,7 @@ export interface Dictionary {
     newRequest: (employerName: string) => string;
   };
   demo: {
+    bannerText: string;
     panelTitle: string;
     switchRole: string;
     fastForward: string;

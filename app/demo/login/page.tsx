@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Logo } from "@/components/brand/logo";
 import { useT } from "@/lib/i18n";
-import { setRole } from "@/lib/data/session";
+import { ROLE_HOME, setRole } from "@/lib/data/session";
 
 export default function LoginPage() {
   const t = useT();
@@ -20,8 +20,7 @@ export default function LoginPage() {
 
   function loginAs(role: "EMPLOYER" | "PROVIDER" | "ADMIN") {
     setRole(role);
-    const dest = role === "EMPLOYER" ? "/employer" : role === "PROVIDER" ? "/provider-dashboard" : "/admin";
-    router.push(dest);
+    router.push(ROLE_HOME[role]);
   }
 
   function handleEmailLogin(e: React.FormEvent) {
