@@ -16,7 +16,6 @@ import { useProviderById } from "@/lib/data/providers";
 import { useEmployer, useRole } from "@/lib/data/session";
 import { useBookingById, signContract } from "@/lib/data/bookings";
 import { useRequireAnyRole } from "@/lib/hooks/use-require-role";
-import { canTransition, toBookingLike } from "@/lib/booking";
 
 export default function ContractPage() {
   useRequireAnyRole();
@@ -41,7 +40,7 @@ export default function ContractPage() {
     );
   }
 
-  const canSign = canTransition(toBookingLike(booking), "SIGN");
+  const canSign = booking.status === "PENDING_SIGNATURES";
   const isEmployerSigner = role === "EMPLOYER" && !booking.employerSignature.signed;
   const isProviderSigner = role === "PROVIDER" && !booking.providerSignature.signed;
   const canSignNow = canSign && (isEmployerSigner || isProviderSigner);
@@ -56,7 +55,7 @@ export default function ContractPage() {
   }
 
   const feeTerms =
-    booking.contractType === "SHORT_TERM" ? t.contract.feeTermsShortTerm : t.contract.feeTermsMonthly;
+    booking.contractKind === "SHORT_JOB" ? t.contract.commissionTermsShortJob : t.contract.commissionTermsLongContract;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -75,6 +74,7 @@ export default function ContractPage() {
         <CardContent className="space-y-6 pt-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold">{t.contract.title}</h1>
+            <p className="mt-1 text-xs font-semibold uppercase text-amber-foreground">{t.contract.draftNotice}</p>
             <p className="mt-2 text-sm text-muted-foreground">{t.contract.agreementIntro}</p>
           </div>
 
@@ -108,8 +108,8 @@ export default function ContractPage() {
             <div className="flex justify-between border-b border-border pb-2 sm:col-span-2">
               <span className="text-muted-foreground">{t.contract.amountLabel}</span>
               <span className="font-medium">
-                {formatMoney(booking.amount, locale)}
-                {booking.contractType === "MONTHLY" ? t.common.perMonth : ""}
+                {formatMoney(booking.wage, locale)}
+                {booking.contractKind === "LONG_CONTRACT" ? t.common.perMonth : ""}
               </span>
             </div>
           </div>
@@ -183,7 +183,7 @@ function SignatureBlock({
   t,
 }: {
   label: string;
-  signature: { signed: boolean; fullName: string | null; timestamp: string | null };
+  signature: { signed: boolean; fullName: string | null; timestamp: string | null; otpCode?: string | null };
   locale: ReturnType<typeof useLocale>;
   t: ReturnType<typeof useT>;
 }) {
@@ -198,6 +198,11 @@ function SignatureBlock({
           <p className="text-xs text-muted-foreground">
             {t.contract.signedOn} {signature.timestamp && formatDateTime(signature.timestamp, locale)}
           </p>
+          {signature.otpCode && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t.contract.signatureOtpLabel}: <span className="font-mono font-semibold">{signature.otpCode}</span>
+            </p>
+          )}
         </>
       ) : (
         <p className="mt-1 text-sm text-muted-foreground">{t.contract.awaitingSignature}</p>

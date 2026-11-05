@@ -17,14 +17,12 @@ import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type PaymentMethod = "MTN" | "ORANGE";
-export type PaymentModalMode = "FUND" | "TOPUP" | "PAYOUT";
 
 type Step = "SELECT" | "WAITING" | "SUCCESS";
 
 interface MomoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mode: PaymentModalMode;
   amount: number;
   onConfirmed: (method: PaymentMethod, phoneNumber: string) => void;
   recipientNote?: string;
@@ -36,10 +34,10 @@ function fakeReference(): string {
   return `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
-export function MomoModal({ open, onOpenChange, mode, amount, onConfirmed, recipientNote }: MomoModalProps) {
+export function MomoModal({ open, onOpenChange, amount, onConfirmed, recipientNote }: MomoModalProps) {
   const t = useT();
   const locale = useLocale();
-  const [step, setStep] = useState<Step>(mode === "PAYOUT" ? "WAITING" : "SELECT");
+  const [step, setStep] = useState<Step>("SELECT");
   const [method, setMethod] = useState<PaymentMethod>("MTN");
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +50,7 @@ export function MomoModal({ open, onOpenChange, mode, amount, onConfirmed, recip
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setStep(mode === "PAYOUT" ? "WAITING" : "SELECT");
+      setStep("SELECT");
       setPhone("");
       setError(null);
       setReference(fakeReference());
@@ -78,13 +76,11 @@ export function MomoModal({ open, onOpenChange, mode, amount, onConfirmed, recip
     setStep("WAITING");
   }
 
-  const title = mode === "PAYOUT" ? t.paymentModal.payoutTitle : t.paymentModal.fundTitle;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{t.paymentModal.fundTitle}</DialogTitle>
         </DialogHeader>
 
         {step === "SELECT" && (

@@ -27,19 +27,16 @@ Release 1 platform defined in `docs/SRS_v2.0.md`.
 No SRS features were implemented. Iteration 1 (domain core) and Iteration 1B (wiring the demo to
 the new domain engine) are separate, future work.
 
-## OD-01 — transcription error found and corrected
+## OD-01 — owner decision, not a transcription error
 
-`docs/SRS_v2.0.md` line 1055 (the §11 Open Decisions table, row OD-01) reads, verbatim:
-
-> `DECISION count both months, as long as they are different contracts`
-
-This contradicts BR-LOY-2 (line 338 of the same document), which states: *"the default is to
-count that calendar month once (open decision OD-01)."* On review, this was confirmed to be a
-transcription error in the markdown copy of the SRS — the canonical source states "count once per
-calendar month" in both places. **Resolution: implement count-once-per-calendar-month**,
-matching BR-LOY-2's default. This is recorded in `CLAUDE.md` under "Open decisions" and will be
-the rule Iteration 1's loyalty-counting code implements. The SRS markdown file itself was not
-edited (out of scope for this pass; flagging here so the discrepancy isn't silently lost).
+An earlier draft of this report treated the §11 Open Decisions table's OD-01 row (*"count both
+months, as long as they are different contracts"*) as contradicting BR-LOY-2's prose and assumed
+the table was a transcription error, defaulting to count-once-per-calendar-month. That assumption
+was wrong. The owner has since decided OD-01 directly: loyalty counts **per contract month** —
+concurrent long contracts each add their own months and are never deduplicated onto one calendar
+month; only funded months count toward the displayed total (BR-LOY-2, revised accordingly in
+`docs/SRS_v2.0.md`). The §11 table row was already correct and needed no edit. See `CLAUDE.md`'s
+"Open decisions" section and `src/domain/loyalty.ts` (Iteration 1B) for the implementation.
 
 ## Audit findings
 
@@ -174,8 +171,9 @@ None.
 - `docs/ROADMAP.md`'s original "what does not need to change" section (claiming `lib/fees.ts`/
   `lib/booking.ts` reuse) is now stale; it carries a superseded-by notice but was not otherwise
   rewritten, per scope.
-- The OD-01 transcription error (see above) was corrected in implementation guidance
-  (`CLAUDE.md`) but the SRS markdown file itself was left as-is — out of scope for this pass.
+- OD-01 (see above) is an owner decision, not an SRS defect — no SRS markdown edit was needed at
+  the time of this report; `docs/SRS_v2.0.md`'s BR-LOY-2 prose was later updated in Iteration 1B
+  to match.
 
 ## Suggested commit message
 

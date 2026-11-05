@@ -15,6 +15,7 @@ import {
   Lock,
   FileText,
   Star,
+  TrendingDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -185,6 +186,7 @@ export default function LandingPage() {
             { icon: Lock, title: t.landing.trustEscrowTitle, body: t.landing.trustEscrowBody },
             { icon: FileText, title: t.landing.trustContractsTitle, body: t.landing.trustContractsBody },
             { icon: Star, title: t.landing.trustReviewsTitle, body: t.landing.trustReviewsBody },
+            { icon: TrendingDown, title: t.landing.trustLoyaltyTitle, body: t.landing.trustLoyaltyBody },
           ].map((card, i) => (
             <Card key={i} className="flex flex-col gap-3 p-6">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -201,17 +203,23 @@ export default function LandingPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <h2 className="mb-3 text-center text-2xl font-bold">{t.landing.feeTitle}</h2>
           <p className="mx-auto mb-8 max-w-2xl text-center text-primary-foreground/90">{t.landing.feeIntro}</p>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl bg-white/10 p-5">
-              <p className="text-sm">{t.landing.feeShortTerm}</p>
+              <p className="text-sm">{t.landing.feeShortJob}</p>
             </div>
             <div className="rounded-xl bg-white/10 p-5">
-              <p className="text-sm">{t.landing.feeMonthlyEarly}</p>
+              <p className="text-sm">{t.landing.feeLevel1}</p>
             </div>
             <div className="rounded-xl bg-white/10 p-5">
-              <p className="text-sm">{t.landing.feeMonthlyLate}</p>
+              <p className="text-sm">{t.landing.feeLevel2}</p>
+            </div>
+            <div className="rounded-xl bg-white/10 p-5">
+              <p className="text-sm">{t.landing.feeLevel3}</p>
             </div>
           </div>
+          <p className="mx-auto mt-4 max-w-2xl text-center text-sm font-semibold text-primary-foreground">
+            {t.landing.feeWorkerKeepsAll}
+          </p>
           <Card className="mt-8 border-0 bg-white p-6 text-foreground">
             <div className="flex items-center gap-2">
               <Handshake className="h-5 w-5 text-amber" />
@@ -220,20 +228,20 @@ export default function LandingPage() {
             <p className="mt-2 text-sm text-muted-foreground">{t.landing.feeExampleBody}</p>
             <div className="mt-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
               <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground">Salary</p>
-                <p className="font-semibold">{formatMoney(150000, locale)}</p>
+                <p className="text-xs text-muted-foreground">{t.offerForm.wageAmount}</p>
+                <p className="font-semibold">{formatMoney(80_000, locale)}</p>
               </div>
               <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground">Fee (month 1-5)</p>
-                <p className="font-semibold">{formatMoney(19500, locale)}</p>
+                <p className="text-xs text-muted-foreground">{t.loyalty.level1Name}</p>
+                <p className="font-semibold">{formatMoney(89_600, locale)}</p>
               </div>
               <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground">Fee (month 6+)</p>
-                <p className="font-semibold">{formatMoney(15000, locale)}</p>
+                <p className="text-xs text-muted-foreground">{t.loyalty.level2Name}</p>
+                <p className="font-semibold">{formatMoney(84_800, locale)}</p>
               </div>
               <div className="rounded-lg bg-secondary p-3">
-                <p className="text-xs text-muted-foreground">Provider gets (6+)</p>
-                <p className="font-semibold text-primary">{formatMoney(135000, locale)}</p>
+                <p className="text-xs text-muted-foreground">{t.offerForm.workerReceivesLine}</p>
+                <p className="font-semibold text-primary">{formatMoney(80_000, locale)}</p>
               </div>
             </div>
           </Card>

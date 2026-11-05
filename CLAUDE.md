@@ -106,10 +106,12 @@ Use the SRS's stated default for every open decision until the founders record a
 choice, and keep each one configurable or isolated so a later change doesn't require a rework.
 
 - **OD-01** (loyalty counting when an employer has two or more long contracts active in the same
-  calendar month): **count once per calendar month** — this is BR-LOY-2's explicit default, and
-  is what gets implemented. (`docs/ITERATION_0.md` has a note on a transcription error found in
-  the markdown copy of the SRS §11 table for this row — the table cell briefly read differently
-  from BR-LOY-2's prose; implementation follows BR-LOY-2.)
+  calendar month): **decided — count per contract month.** Concurrent long contracts each add
+  their own loyalty months; they are never deduplicated onto one calendar month. Only funded
+  months count toward the displayed total (BR-LOY-2). Implemented in `src/domain/loyalty.ts` and
+  kept behind that module's pure functions so a future change stays isolated to one place.
+  (`docs/ITERATION_0.md` has a short note that this was an owner decision, not a markdown
+  transcription bug.)
 - All other OD-02 through OD-13 defaults: implement exactly as stated in SRS §11, each behind a
   configuration value or an isolated code path, not hardcoded inline.
 

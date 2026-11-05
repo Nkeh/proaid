@@ -11,10 +11,13 @@ import { formatMoney, formatDateTime } from "@/lib/format";
 import { useRequireRole } from "@/lib/hooks/use-require-role";
 import { CURRENT_PROVIDER_ID } from "@/lib/data/session";
 import { useProviderById } from "@/lib/data/providers";
-import { useBookingsForProvider, acceptBooking, declineBooking } from "@/lib/data/bookings";
-import { useWallet } from "@/lib/data/wallet";
+import { useBookingsForProvider, acceptOffer, declineOffer } from "@/lib/data/bookings";
 import { useEmployer } from "@/lib/data/session";
 import { isTerminal } from "@/lib/booking";
+import { useAppStore } from "@/store/useAppStore";
+import type { VettingChecklist } from "@/lib/data/types";
+
+const INCOMING_STATUSES = ["OFFER_SENT", "COUNTERED"];
 
 export default function ProviderDashboardPage() {
   useRequireRole("PROVIDER");
@@ -23,23 +26,24 @@ export default function ProviderDashboardPage() {
   const provider = useProviderById(CURRENT_PROVIDER_ID);
   const employer = useEmployer();
   const bookings = useBookingsForProvider(CURRENT_PROVIDER_ID);
-  const wallet = useWallet();
+  const transactions = useAppStore((s) => s.transactions);
 
   if (!provider) return null;
 
-  const incoming = bookings.filter((b) => b.status === "REQUESTED");
-  const active = bookings.filter((b) => !isTerminal(b.status) && b.status !== "REQUESTED");
+  const incoming = bookings.filter((b) => INCOMING_STATUSES.includes(b.status));
+  const active = bookings.filter((b) => !isTerminal(b.status) && !INCOMING_STATUSES.includes(b.status));
 
-  const payouts = wallet.transactions.filter(
-    (tx) => tx.type === "PAYOUT" && bookings.some((b) => b.id === tx.bookingId)
-  );
+  const bookingIds = new Set(bookings.map((b) => b.id));
+  const payouts = transactions.filter((tx) => tx.type === "PAYOUT" && tx.bookingId && bookingIds.has(tx.bookingId));
   const earningsToDate = payouts.reduce((sum, tx) => sum + tx.amount, 0);
 
-  const verificationItems: { key: keyof typeof provider.verification; label: string }[] = [
-    { key: "idVerified", label: t.verification.idVerified },
-    { key: "referencesConfirmed", label: t.verification.referencesConfirmed },
-    { key: "medicalCertificate", label: t.verification.medicalCertificate },
-    { key: "skillsCheck", label: t.verification.skillsCheck },
+  const vettingItems: { key: keyof VettingChecklist; label: string }[] = [
+    { key: "identityConfirmed", label: t.vetting.identityConfirmed },
+    { key: "criminalRecordClear", label: t.vetting.criminalRecordClear },
+    { key: "referee1Confirmed", label: t.vetting.referee1Confirmed },
+    { key: "referee2Confirmed", label: t.vetting.referee2Confirmed },
+    { key: "medicalFitness", label: t.vetting.medicalFitness },
+    { key: "skillsConfirmed", label: t.vetting.skillsConfirmed },
   ];
 
   return (
@@ -64,8 +68,8 @@ export default function ProviderDashboardPage() {
             <CardTitle className="text-base">{t.providerDashboard.profileStatus}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            {verificationItems.map((item) => {
-              const checked = provider.verification[item.key];
+            {vettingItems.map((item) => {
+              const checked = provider.vetting[item.key] === "PASS";
               return (
                 <div key={item.key} className="flex items-center gap-2 text-xs">
                   {checked ? (
@@ -83,12 +87,12 @@ export default function ProviderDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t.providerDashboard.incomingRequests}</CardTitle>
+          <CardTitle>{t.providerDashboard.incomingOffers}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {incoming.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">
-              {t.providerDashboard.noIncomingRequests}
+              {t.providerDashboard.noIncomingOffers}
             </p>
           ) : (
             incoming.map((b) => (
@@ -96,13 +100,13 @@ export default function ProviderDashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{employer.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {t.categories[b.category]} &middot; {formatMoney(b.amount, locale)}
+                    {t.categories[b.category]} &middot; {formatMoney(b.wage, locale)}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => acceptBooking(b.id)}>
+                <Button size="sm" onClick={() => acceptOffer(b.id)}>
                   {t.providerDashboard.acceptButton}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => declineBooking(b.id)}>
+                <Button size="sm" variant="outline" onClick={() => declineOffer(b.id)}>
                   {t.providerDashboard.declineButton}
                 </Button>
               </div>

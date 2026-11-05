@@ -8,6 +8,8 @@ import { useT, useLocale } from "@/lib/i18n";
 import { formatMoney } from "@/lib/format";
 import {
   CATEGORY_OPTIONS,
+  CITY_OPTIONS,
+  NEIGHBOURHOODS_BY_CITY,
   NEIGHBOURHOOD_OPTIONS,
   WORK_TYPE_OPTIONS,
   LANGUAGE_OPTIONS,
@@ -29,6 +31,7 @@ export function FiltersSidebar({ filters, onChange, onClear }: FiltersSidebarPro
   const locale = useLocale();
 
   const rateRange: [number, number] = [filters.minRate ?? 0, filters.maxRate ?? MAX_RATE];
+  const neighbourhoodOptions = filters.city ? NEIGHBOURHOODS_BY_CITY[filters.city] : NEIGHBOURHOOD_OPTIONS;
 
   return (
     <div className="space-y-6">
@@ -60,6 +63,32 @@ export function FiltersSidebar({ filters, onChange, onClear }: FiltersSidebarPro
       </div>
 
       <div className="space-y-2">
+        <Label>{t.search.city}</Label>
+        <Select
+          value={filters.city ?? ANY}
+          onValueChange={(v) =>
+            onChange({
+              ...filters,
+              city: v === ANY ? undefined : (v as ProviderFilters["city"]),
+              neighbourhood: undefined,
+            })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue>{filters.city ? t.cities[filters.city] : t.search.anyCity}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANY}>{t.search.anyCity}</SelectItem>
+            {CITY_OPTIONS.map((c) => (
+              <SelectItem key={c} value={c}>
+                {t.cities[c]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
         <Label>{t.search.neighbourhood}</Label>
         <Select
           value={filters.neighbourhood ?? ANY}
@@ -74,7 +103,7 @@ export function FiltersSidebar({ filters, onChange, onClear }: FiltersSidebarPro
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ANY}>{t.search.anyNeighbourhood}</SelectItem>
-            {NEIGHBOURHOOD_OPTIONS.map((n) => (
+            {neighbourhoodOptions.map((n) => (
               <SelectItem key={n} value={n}>
                 {t.neighbourhoods[n]}
               </SelectItem>

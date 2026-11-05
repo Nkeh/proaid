@@ -14,7 +14,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ProAid Cameroon - Trusted care, verified providers",
   description:
-    "ProAid connects families, professionals and expatriates in Douala with vetted nannies, house helps, cooks and caregivers.",
+    "ProAid connects families, professionals and expatriates in Douala and Bamenda with vetted nannies, house helps, cooks and caregivers.",
   manifest: "/manifest.webmanifest",
 };
 

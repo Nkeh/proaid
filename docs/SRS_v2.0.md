@@ -332,10 +332,9 @@ brackets are configurable by a Super Admin with an effective date.
   Months under long contracts add up across all of an employer's long
   contracts, including with different workers.
 
-- **BR-LOY-2** One loyalty month is counted for each contract month of a
-  long contract that the employer funds. When an employer has two or
-  more long contracts running in the same calendar month, the default is
-  to count that calendar month once (open decision OD-01).
+- **BR-LOY-2** One loyalty month is counted for each funded contract
+  month of each long contract. Concurrent long contracts each add their
+  own months (OD-01, decided).
 
 - **BR-LOY-3** Breaks do not count. Months without an active long
   contract are not added, but loyalty already earned is kept with no

@@ -4,33 +4,49 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Send, Star, FileText, Wallet as WalletIcon, MessageCircle } from "lucide-react";
+import { Send, Star, FileText, Wallet as WalletIcon, MessageCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { InitialsAvatar } from "@/components/brand/initials-avatar";
 import { LifecycleTracker } from "@/components/booking/lifecycle-tracker";
 import { MomoModal } from "@/components/payment/momo-modal";
 import { useT, useLocale } from "@/lib/i18n";
 import { formatMoney, formatDateTime, interpolate } from "@/lib/format";
-import { calculateFee } from "@/lib/fees";
-import { canTransition, toBookingLike } from "@/lib/booking";
-import { useProviderById } from "@/lib/data/providers";
+import { canTransition as canTransitionContract } from "@/lib/booking";
+import { useProviderById, useProviders } from "@/lib/data/providers";
 import { useEmployer, useRole } from "@/lib/data/session";
 import {
   useBookingById,
-  acceptBooking,
-  declineBooking,
-  fundBooking,
-  confirmService,
-  cancelBooking,
+  acceptOffer,
+  declineOffer,
+  withdrawOffer,
+  counterOffer,
+  fundPeriod,
+  fundShortJob,
+  confirmShortJobCompletion,
+  giveNotice,
+  terminateContract,
+  cancelOffer,
+  requestReplacement,
+  raiseDispute,
   submitReview,
   sendMessage,
 } from "@/lib/data/bookings";
-import { useWallet } from "@/lib/data/wallet";
+import { useWalletSummary } from "@/lib/data/wallet";
+import { findCurrentPeriod } from "@/store/useAppStore";
+import type { DisputeCategory } from "@/lib/data/types";
 import { useRequireAnyRole } from "@/lib/hooks/use-require-role";
 import { cn } from "@/lib/utils";
 
@@ -42,14 +58,22 @@ export default function BookingDetailPage() {
   const locale = useLocale();
   const role = useRole();
   const employer = useEmployer();
-  const wallet = useWallet();
 
   const booking = useBookingById(id);
   const provider = useProviderById(booking?.providerId);
+  const wallet = useWalletSummary(booking?.employerId ?? employer.id);
+  const sameCategoryProviders = useProviders(booking ? { category: booking.category } : {});
 
   const [fundModalOpen, setFundModalOpen] = useState(false);
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [counterOpen, setCounterOpen] = useState(false);
+  const [counterWage, setCounterWage] = useState(0);
+  const [disputeCategory, setDisputeCategory] = useState<DisputeCategory>("SERVICE_QUALITY");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [replacementProviderId, setReplacementProviderId] = useState("");
   const [messageText, setMessageText] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -62,43 +86,68 @@ export default function BookingDetailPage() {
     );
   }
 
-  const bookingLike = toBookingLike(booking);
   const isEmployerView = role === "EMPLOYER";
   const isProviderView = role === "PROVIDER";
   const senderName = isEmployerView ? employer.name : isProviderView ? provider.name : "ProAid Admin";
-
-  const { providerAmount } = calculateFee({
-    contractType: booking.contractType,
-    amount: booking.amount,
-    monthNumber: booking.currentMonth,
-  });
+  const isLongContract = booking.contractKind === "LONG_CONTRACT";
+  const currentPeriod = findCurrentPeriod(booking);
 
   function handleAccept() {
-    acceptBooking(booking!.id);
+    acceptOffer(booking!.id);
     toast.success(t.bookingDetail.acceptButton);
   }
   function handleDecline() {
-    declineBooking(booking!.id);
+    declineOffer(booking!.id);
     toast.success(t.bookingDetail.declineButton);
   }
-  function handleFundClick() {
-    if (wallet.balance < booking!.amount) {
-      toast.error(t.wallet.insufficientFunds);
-      router.push("/demo/wallet");
-      return;
+  function handleWithdraw() {
+    withdrawOffer(booking!.id);
+    toast.success(t.bookingDetail.withdrawButton);
+  }
+  function handleCounterSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    counterOffer(booking!.id, counterWage);
+    setCounterOpen(false);
+    toast.success(t.bookingDetail.counterButton);
+  }
+  function handleFundConfirmed() {
+    if (isLongContract && currentPeriod) {
+      fundPeriod(booking!.id, currentPeriod.id, "MTN", "6xxxxxxxx");
+    } else {
+      fundShortJob(booking!.id, "MTN", "6xxxxxxxx");
     }
-    setFundModalOpen(true);
   }
-  function handleFundConfirmed(method: "MTN" | "ORANGE", phone: string) {
-    fundBooking(booking!.id, method, phone);
+  function handleConfirmJobDone() {
+    confirmShortJobCompletion(booking!.id);
   }
-  function handleConfirmServiceConfirmed() {
-    confirmService(booking!.id);
+  function handleGiveNotice() {
+    giveNotice(booking!.id);
+    toast.success(t.bookingDetail.giveNoticeButton);
+  }
+  function handleTerminate() {
+    terminateContract(booking!.id, "Ended early by employer");
+    setTerminateDialogOpen(false);
+    toast.success(t.bookingDetail.terminateButton);
   }
   function handleCancel() {
-    cancelBooking(booking!.id);
+    cancelOffer(booking!.id);
     setCancelDialogOpen(false);
     toast.success(t.bookingDetail.cancelButton);
+  }
+  function handleRaiseDispute(e: React.FormEvent) {
+    e.preventDefault();
+    if (!role) return;
+    raiseDispute(booking!.id, currentPeriod?.id, role, disputeCategory, disputeDescription);
+    setDisputeDialogOpen(false);
+    setDisputeDescription("");
+    toast.success(t.bookingDetail.raiseDisputeButton);
+  }
+  function handleRequestReplacement(e: React.FormEvent) {
+    e.preventDefault();
+    if (!replacementProviderId) return;
+    const newId = requestReplacement(booking!.id, replacementProviderId);
+    setReplaceDialogOpen(false);
+    router.push(`/demo/booking/${newId}`);
   }
   function handleSendMessage(e: React.FormEvent) {
     e.preventDefault();
@@ -112,10 +161,17 @@ export default function BookingDetailPage() {
     toast.success(t.bookingDetail.reviewSubmitted);
   }
 
-  const monthLabel =
-    booking.contractType === "MONTHLY"
-      ? interpolate(t.bookingDetail.monthOf, { current: booking.currentMonth, total: booking.durationMonths })
+  const headerAmount = isLongContract ? currentPeriod?.employerPaysTotal ?? booking.wage : booking.wage;
+  const periodLabel =
+    isLongContract && currentPeriod
+      ? interpolate(t.bookingDetail.periodOf, { current: currentPeriod.periodNumber, total: booking.periods.length })
       : null;
+
+  const fundAmount = isLongContract ? currentPeriod?.employerPaysTotal ?? 0 : headerAmount;
+  const canFund = isEmployerView && (isLongContract ? Boolean(currentPeriod) : canTransitionContract(booking.status, "FUND"));
+  const canFundNow = canFund && (isLongContract ? ["AWAITING_FUNDING", "OVERDUE"].includes(currentPeriod?.status ?? "") : true);
+
+  const bookingTransactions = wallet.transactions.filter((tx) => tx.bookingId === booking.id);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 sm:px-6">
@@ -132,28 +188,41 @@ export default function BookingDetailPage() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold text-primary">{formatMoney(booking.amount, locale)}</p>
-              {monthLabel && <p className="text-xs text-muted-foreground">{monthLabel}</p>}
+              <p className="text-lg font-bold text-primary">{formatMoney(headerAmount, locale)}</p>
+              {periodLabel && <p className="text-xs text-muted-foreground">{periodLabel}</p>}
             </div>
           </div>
 
-          <LifecycleTracker status={booking.status} />
+          <LifecycleTracker status={booking.status} isLongContract={isLongContract} />
 
-          {booking.status === "DECLINED" && (
-            <p className="text-sm text-destructive">{t.bookingDetail.declinedNotice}</p>
+          {booking.status === "CLOSED" && <p className="text-sm text-destructive">{t.bookingDetail.closedNotice}</p>}
+          {booking.status === "CANCELLED" && <p className="text-sm text-destructive">{t.bookingDetail.cancelledNotice}</p>}
+          {booking.status === "TERMINATED" && <p className="text-sm text-destructive">{t.bookingDetail.terminatedNotice}</p>}
+          {booking.status === "COMPLETED" && <p className="text-sm text-primary">{t.bookingDetail.completedNotice}</p>}
+          {currentPeriod?.status === "OVERDUE" && (
+            <p className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" /> {t.bookingDetail.overdueNotice}
+            </p>
           )}
-          {booking.status === "CANCELLED" && (
-            <p className="text-sm text-destructive">{t.bookingDetail.cancelledNotice}</p>
-          )}
-          {booking.status === "COMPLETED" && !monthLabel && (
-            <p className="text-sm text-primary">{t.bookingDetail.completedNotice}</p>
-          )}
+          {currentPeriod?.status === "ON_HOLD" && <p className="text-sm text-amber-foreground">{t.bookingDetail.onHoldNotice}</p>}
 
           {(isEmployerView || isProviderView) && (
             <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
               <p className="mr-auto text-sm font-semibold">{t.bookingDetail.actionsTitle}</p>
 
-              {isProviderView && canTransition(bookingLike, "ACCEPT") && (
+              {isProviderView && canTransitionContract(booking.status, "ACCEPT") && (
+                <>
+                  <Button onClick={handleAccept}>{t.bookingDetail.acceptButton}</Button>
+                  <Button variant="outline" onClick={handleDecline}>
+                    {t.bookingDetail.declineButton}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setCounterOpen(true)}>
+                    {t.bookingDetail.counterButton}
+                  </Button>
+                </>
+              )}
+
+              {isEmployerView && booking.status === "COUNTERED" && (
                 <>
                   <Button onClick={handleAccept}>{t.bookingDetail.acceptButton}</Button>
                   <Button variant="outline" onClick={handleDecline}>
@@ -162,26 +231,52 @@ export default function BookingDetailPage() {
                 </>
               )}
 
-              {canTransition(bookingLike, "SIGN") && (
+              {isEmployerView && canTransitionContract(booking.status, "WITHDRAW") && (
+                <Button variant="ghost" onClick={handleWithdraw}>
+                  {t.bookingDetail.withdrawButton}
+                </Button>
+              )}
+
+              {booking.status === "PENDING_SIGNATURES" && (
                 <Button variant="outline" nativeButton={false} render={<Link href={`/demo/booking/${booking.id}/contract`} />}>
                   {t.bookingDetail.goToContractButton}
                 </Button>
               )}
 
-              {isEmployerView && canTransition(bookingLike, "FUND") && (
-                <Button onClick={handleFundClick} className="gap-2">
+              {canFundNow && (
+                <Button onClick={() => setFundModalOpen(true)} className="gap-2">
                   <WalletIcon className="h-4 w-4" />
                   {t.bookingDetail.fundButton}
                 </Button>
               )}
 
-              {isEmployerView && canTransition(bookingLike, "CONFIRM_SERVICE") && (
-                <Button onClick={() => setConfirmModalOpen(true)} className="gap-2">
-                  {t.bookingDetail.confirmServiceButton}
+              {isEmployerView && !isLongContract && canTransitionContract(booking.status, "CONFIRM") && (
+                <Button onClick={handleConfirmJobDone}>{t.bookingDetail.confirmJobDoneButton}</Button>
+              )}
+
+              {isEmployerView && booking.status === "ACTIVE" && (
+                <Button variant="outline" onClick={handleGiveNotice}>
+                  {t.bookingDetail.giveNoticeButton}
                 </Button>
               )}
 
-              {isEmployerView && canTransition(bookingLike, "CANCEL") && (
+              {isEmployerView && (booking.status === "ACTIVE" || booking.status === "ENDING") && (
+                <Button variant="ghost" className="text-destructive" onClick={() => setTerminateDialogOpen(true)}>
+                  {t.bookingDetail.terminateButton}
+                </Button>
+              )}
+
+              {(currentPeriod?.status === "FUNDED" || booking.status === "FUNDED") && (
+                <Button variant="ghost" onClick={() => setDisputeDialogOpen(true)}>
+                  {t.bookingDetail.raiseDisputeButton}
+                </Button>
+              )}
+
+              {isEmployerView && booking.status === "TERMINATED" && (
+                <Button onClick={() => setReplaceDialogOpen(true)}>{t.bookingDetail.requestReplacementButton}</Button>
+              )}
+
+              {isEmployerView && canTransitionContract(booking.status, "CANCEL") && (
                 <Button variant="ghost" className="text-destructive" onClick={() => setCancelDialogOpen(true)}>
                   {t.bookingDetail.cancelButton}
                 </Button>
@@ -190,6 +285,29 @@ export default function BookingDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {counterOpen && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t.bookingDetail.counterButton}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCounterSubmit} className="flex items-end gap-2">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="counterWage">{t.bookingDetail.counterLabel}</Label>
+                <Input
+                  id="counterWage"
+                  type="number"
+                  min={0}
+                  value={counterWage || booking.wage}
+                  onChange={(e) => setCounterWage(Number(e.target.value) || 0)}
+                />
+              </div>
+              <Button type="submit">{t.common.submit}</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="contract">
         <TabsList className="grid w-full grid-cols-3">
@@ -227,32 +345,47 @@ export default function BookingDetailPage() {
         </TabsContent>
 
         <TabsContent value="payment" className="space-y-3">
+          {isLongContract && booking.periods.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t.offerForm.summaryTitle}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {booking.periods.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm">
+                    <span>{interpolate(t.bookingDetail.periodOf, { current: p.periodNumber, total: booking.periods.length })}</span>
+                    <span className="text-muted-foreground">{t.periodStatusLabels[p.status]}</span>
+                    <span className="font-semibold">{formatMoney(p.employerPaysTotal, locale)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t.wallet.transactionHistory}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {wallet.transactions.filter((tx) => tx.bookingId === booking.id).length === 0 ? (
+              {bookingTransactions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t.wallet.noTransactions}</p>
               ) : (
-                wallet.transactions
-                  .filter((tx) => tx.bookingId === booking.id)
-                  .map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between text-sm">
-                      <div>
-                        <p>{locale === "fr" ? tx.descriptionFr : tx.description}</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(tx.timestamp, locale)}</p>
-                      </div>
-                      <span
-                        className={cn(
-                          "font-semibold",
-                          tx.type === "PAYOUT" || tx.type === "FEE" ? "text-muted-foreground" : "text-primary"
-                        )}
-                      >
-                        {formatMoney(tx.amount, locale)}
-                      </span>
+                bookingTransactions.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <p>{locale === "fr" ? tx.descriptionFr : tx.description}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(tx.timestamp, locale)}</p>
                     </div>
-                  ))
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        tx.type === "PAYOUT" || tx.type === "COMMISSION" ? "text-muted-foreground" : "text-primary"
+                      )}
+                    >
+                      {formatMoney(tx.amount, locale)}
+                    </span>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
@@ -279,7 +412,7 @@ export default function BookingDetailPage() {
                   <Textarea
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
-                    placeholder={t.bookingForm.notesPlaceholder}
+                    placeholder={t.offerForm.notesPlaceholder}
                   />
                   <Button type="submit">{t.bookingDetail.submitReview}</Button>
                 </form>
@@ -343,17 +476,8 @@ export default function BookingDetailPage() {
       <MomoModal
         open={fundModalOpen}
         onOpenChange={setFundModalOpen}
-        mode="FUND"
-        amount={booking.amount}
+        amount={fundAmount}
         onConfirmed={handleFundConfirmed}
-      />
-      <MomoModal
-        open={confirmModalOpen}
-        onOpenChange={setConfirmModalOpen}
-        mode="PAYOUT"
-        amount={providerAmount}
-        onConfirmed={handleConfirmServiceConfirmed}
-        recipientNote={provider.momoNumber}
       />
 
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
@@ -370,6 +494,98 @@ export default function BookingDetailPage() {
               {t.bookingDetail.cancelButton}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={terminateDialogOpen} onOpenChange={setTerminateDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t.bookingDetail.confirmTerminateTitle}</DialogTitle>
+            <DialogDescription>{t.bookingDetail.confirmTerminateBody}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTerminateDialogOpen(false)}>
+              {t.common.cancel}
+            </Button>
+            <Button variant="destructive" onClick={handleTerminate}>
+              {t.bookingDetail.terminateButton}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={disputeDialogOpen} onOpenChange={setDisputeDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t.bookingDetail.raiseDisputeButton}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRaiseDispute} className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              {(["SERVICE_QUALITY", "NON_PAYMENT", "UNSAFE_CONDITIONS", "BREACH_OF_CONTRACT", "OTHER"] as DisputeCategory[]).map(
+                (category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setDisputeCategory(category)}
+                    className={cn(
+                      "rounded-lg border-2 px-3 py-2 text-left text-xs font-medium",
+                      disputeCategory === category ? "border-primary bg-primary/10 text-primary" : "border-border"
+                    )}
+                  >
+                    {t.disputeCategoryLabels[category]}
+                  </button>
+                )
+              )}
+            </div>
+            <Textarea
+              value={disputeDescription}
+              onChange={(e) => setDisputeDescription(e.target.value)}
+              placeholder={t.offerForm.notesPlaceholder}
+              required
+            />
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setDisputeDialogOpen(false)}>
+                {t.common.cancel}
+              </Button>
+              <Button type="submit">{t.common.submit}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={replaceDialogOpen} onOpenChange={setReplaceDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t.bookingDetail.requestReplacementButton}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRequestReplacement} className="space-y-3">
+            <div className="space-y-2">
+              {sameCategoryProviders
+                .filter((p) => p.id !== booking.providerId)
+                .slice(0, 5)
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setReplacementProviderId(p.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-sm",
+                      replacementProviderId === p.id ? "border-primary bg-primary/10" : "border-border"
+                    )}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setReplaceDialogOpen(false)}>
+                {t.common.cancel}
+              </Button>
+              <Button type="submit" disabled={!replacementProviderId}>
+                {t.common.submit}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,12 +1,9 @@
 import type { Locale } from "./i18n/dictionary";
+import { formatXaf } from "@/src/domain/money";
 
 /** Formats an XAF amount per locale convention: "150,000 XAF" (en) vs "150 000 XAF" (fr). */
 export function formatMoney(amount: number, locale: Locale): string {
-  const rounded = Math.round(amount);
-  const intlLocale = locale === "fr" ? "fr-FR" : "en-US";
-  const number = new Intl.NumberFormat(intlLocale, { maximumFractionDigits: 0 }).format(rounded);
-  // Normalize fr-FR's narrow no-break space group separator to a regular space for reliable rendering.
-  return `${number.replace(/ | /g, " ")} XAF`;
+  return formatXaf(amount, locale);
 }
 
 export function formatDate(iso: string, locale: Locale): string {
@@ -29,6 +26,15 @@ export function formatDateTime(iso: string, locale: Locale): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+/** FR-SRCH-02/03: providers are shown as "First L." everywhere outside the signed contract itself. */
+export function firstNameLastInitial(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  const [first, ...rest] = parts;
+  const lastInitial = rest[rest.length - 1][0];
+  return `${first} ${lastInitial}.`;
 }
 
 /** Replaces {token} placeholders in a template string, e.g. interpolate("Month {current} of {total}", { current: 1, total: 6 }). */

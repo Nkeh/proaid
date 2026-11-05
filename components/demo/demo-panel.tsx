@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Settings2, RotateCcw, FastForward, Users } from "lucide-react";
+import { Settings2, RotateCcw, Clock, Users, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,18 +13,14 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store/useAppStore";
 import { ROLE_HOME, useRole } from "@/lib/data/session";
-import { useAllBookings, fastForwardToMonth6 } from "@/lib/data/bookings";
-import { useAllProviders } from "@/lib/data/providers";
-import { useT } from "@/lib/i18n";
+import { useAllBookings } from "@/lib/data/bookings";
+import { advanceDemoClock, setDemoDateTo, setEmployerLoyaltyMonth, useDemoDate } from "@/lib/data/clock";
+import { addDays } from "@/src/domain/schedule";
+import { useT, useLocale } from "@/lib/i18n";
+import { formatDate } from "@/lib/format";
 
 /** Pages that make sense for more than one role - the demo panel keeps the user here on a role switch. Everything else redirects to the new role's home. */
 const SHARED_PATH_PREFIXES = ["/demo/booking/", "/demo/search", "/demo/provider/"];
@@ -37,18 +33,16 @@ export function DemoPanel() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useT();
+  const locale = useLocale();
   const role = useRole();
   const open = useAppStore((s) => s.demoPanelOpen);
   const setOpen = useAppStore((s) => s.setDemoPanelOpen);
   const setRole = useAppStore((s) => s.setRole);
   const resetDemoData = useAppStore((s) => s.resetDemoData);
+  const demoDate = useDemoDate();
 
   const bookings = useAllBookings();
-  const providers = useAllProviders();
-  const monthlyBookings = bookings.filter(
-    (b) => b.contractType === "MONTHLY" && b.currentMonth < Math.min(6, b.durationMonths)
-  );
-  const [selectedBookingId, setSelectedBookingId] = useState<string>("");
+  const [loyaltyMonthInput, setLoyaltyMonthInput] = useState("");
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   useEffect(() => {
@@ -61,10 +55,6 @@ export function DemoPanel() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, setOpen]);
 
-  function providerName(providerId: string) {
-    return providers.find((p) => p.id === providerId)?.name ?? providerId;
-  }
-
   function handleSwitchRole(newRole: "EMPLOYER" | "PROVIDER" | "ADMIN") {
     setRole(newRole);
     if (!isSharedPath(pathname)) {
@@ -74,11 +64,49 @@ export function DemoPanel() {
     toast.success(`${t.nav[newRole === "EMPLOYER" ? "roleEmployer" : newRole === "PROVIDER" ? "roleProvider" : "roleAdmin"]}`);
   }
 
-  function handleFastForward() {
-    if (!selectedBookingId) return;
-    fastForwardToMonth6(selectedBookingId);
-    setSelectedBookingId("");
-    toast.success(t.demo.fastForwardSuccess);
+  function nextFundingDeadline(): string | undefined {
+    const dates = bookings
+      .flatMap((b) => b.periods)
+      .filter((p) => p.status === "AWAITING_FUNDING")
+      .map((p) => p.fundingWindowEndDate)
+      .sort();
+    return dates[0] ? addDays(dates[0], 1) : undefined;
+  }
+
+  function nextPaymentDate(): string | undefined {
+    const dates = bookings
+      .flatMap((b) => b.periods)
+      .filter((p) => p.status === "FUNDED")
+      .map((p) => p.paymentDate)
+      .sort();
+    return dates[0];
+  }
+
+  function handleAdvanceOneDay() {
+    advanceDemoClock(1);
+    toast.success(t.demo.advanceSuccess);
+  }
+
+  function handleAdvanceToFundingDeadline() {
+    const target = nextFundingDeadline();
+    if (!target) return;
+    setDemoDateTo(target);
+    toast.success(t.demo.advanceSuccess);
+  }
+
+  function handleAdvanceToPaymentDate() {
+    const target = nextPaymentDate();
+    if (!target) return;
+    setDemoDateTo(target);
+    toast.success(t.demo.advanceSuccess);
+  }
+
+  function handleSetLoyaltyMonth() {
+    const value = Number(loyaltyMonthInput);
+    if (!Number.isInteger(value) || value < 1) return;
+    setEmployerLoyaltyMonth(value);
+    setLoyaltyMonthInput("");
+    toast.success(t.demo.advanceSuccess);
   }
 
   function handleReset() {
@@ -138,37 +166,48 @@ export function DemoPanel() {
 
             <div>
               <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <FastForward className="h-4 w-4" /> {t.demo.fastForward}
+                <Clock className="h-4 w-4" /> {t.demo.dateLabel}: {formatDate(demoDate, locale)}
               </p>
-              <p className="mb-2 text-xs text-muted-foreground">{t.demo.fastForwardHint}</p>
-              {monthlyBookings.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t.demo.noEligibleBookings}</p>
-              ) : (
-                <div className="flex gap-2">
-                  <Select value={selectedBookingId} onValueChange={(v) => setSelectedBookingId(v ?? "")}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder={t.demo.selectBookingPlaceholder}>
-                        {(() => {
-                          const selected = monthlyBookings.find((b) => b.id === selectedBookingId);
-                          return selected
-                            ? `${providerName(selected.providerId)} - month ${selected.currentMonth}`
-                            : t.demo.selectBookingPlaceholder;
-                        })()}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {monthlyBookings.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {providerName(b.providerId)} - month {b.currentMonth}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" onClick={handleFastForward} disabled={!selectedBookingId}>
-                    {t.demo.goButton}
-                  </Button>
-                </div>
-              )}
+              <div className="flex flex-col gap-2">
+                <Button variant="outline" size="sm" onClick={handleAdvanceOneDay}>
+                  {t.demo.advanceOneDay}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAdvanceToFundingDeadline}
+                  disabled={!nextFundingDeadline()}
+                >
+                  {t.demo.advanceToFundingDeadline}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAdvanceToPaymentDate}
+                  disabled={!nextPaymentDate()}
+                >
+                  {t.demo.advanceToPaymentDate}
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <TrendingUp className="h-4 w-4" /> {t.demo.setLoyaltyMonthLabel}
+              </p>
+              <p className="mb-2 text-xs text-muted-foreground">{t.demo.setLoyaltyMonthHint}</p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  value={loyaltyMonthInput}
+                  onChange={(e) => setLoyaltyMonthInput(e.target.value)}
+                  className="flex-1"
+                />
+                <Button size="sm" onClick={handleSetLoyaltyMonth} disabled={!loyaltyMonthInput}>
+                  {t.demo.goButton}
+                </Button>
+              </div>
             </div>
 
             <div>

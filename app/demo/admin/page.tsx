@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Users, Banknote, Receipt, UserCheck, Clock, FileCheck } from "lucide-react";
+import { Users, Banknote, Receipt, UserCheck, Clock, FileCheck, AlertTriangle, ShieldAlert, Repeat } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,15 +10,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { InitialsAvatar } from "@/components/brand/initials-avatar";
-import { PlacementsChart, FeesChart } from "@/components/admin/admin-charts";
+import { PlacementsChart, CommissionChart } from "@/components/admin/admin-charts";
 import { useT, useLocale } from "@/lib/i18n";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, interpolate } from "@/lib/format";
 import { useRequireRole } from "@/lib/hooks/use-require-role";
-import { useAdminStats } from "@/lib/data/admin";
+import { useAdminStats, useDisputes, resolveDispute } from "@/lib/data/admin";
 import { usePendingProviders, useProviderById, approveProvider, rejectProvider } from "@/lib/data/providers";
 import { useAllBookings } from "@/lib/data/bookings";
 import { useEmployer } from "@/lib/data/session";
-import type { Provider } from "@/lib/data/types";
+import { findCurrentPeriod } from "@/store/useAppStore";
+import type { Booking, DisputeDecisionOutcome, Provider } from "@/lib/data/types";
 
 function KpiCard({
   icon: Icon,
@@ -44,13 +45,7 @@ function KpiCard({
   );
 }
 
-function VettingDetailDialog({
-  provider,
-  onClose,
-}: {
-  provider: Provider | null;
-  onClose: () => void;
-}) {
+function VettingDetailDialog({ provider, onClose }: { provider: Provider | null; onClose: () => void }) {
   const t = useT();
   const [reason, setReason] = useState("");
 
@@ -79,17 +74,19 @@ function VettingDetailDialog({
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {t.categories[provider.category]} &middot; {t.neighbourhoods[provider.neighbourhood]}
+            {t.categories[provider.category]} &middot; {t.cities[provider.city]}, {t.neighbourhoods[provider.neighbourhood]}
           </p>
+          {provider.interviewSlot && (
+            <p className="text-sm text-muted-foreground">
+              {t.admin.interviewSlotLabel}: {provider.interviewSlot.slice(0, 10)}
+            </p>
+          )}
 
           <div>
             <p className="mb-2 text-sm font-semibold">{t.admin.documentsTitle}</p>
             <div className="grid grid-cols-2 gap-2">
               {provider.documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-2 rounded-lg border border-border p-3 text-xs"
-                >
+                <div key={doc.id} className="flex items-center gap-2 rounded-lg border border-border p-3 text-xs">
                   <FileCheck
                     className={`h-4 w-4 ${doc.status === "SUBMITTED" ? "text-primary" : "text-muted-foreground"}`}
                   />
@@ -132,6 +129,12 @@ function BookingProviderName({ providerId }: { providerId: string }) {
   return <span>{provider?.name ?? providerId}</span>;
 }
 
+function bookingAmount(booking: Booking): number {
+  if (booking.contractKind === "SHORT_JOB") return booking.wage;
+  const current = findCurrentPeriod(booking);
+  return current?.employerPaysTotal ?? booking.wage;
+}
+
 export default function AdminDashboardPage() {
   useRequireRole("ADMIN");
   const t = useT();
@@ -139,30 +142,74 @@ export default function AdminDashboardPage() {
   const stats = useAdminStats();
   const pending = usePendingProviders();
   const bookings = useAllBookings();
+  const disputes = useDisputes();
   const employer = useEmployer();
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const selectedProvider = useProviderById(selectedProviderId ?? undefined) ?? null;
+
+  const openDisputes = disputes.filter((d) => d.status === "OPEN");
+
+  const flaggedPeriods = bookings.flatMap((b) =>
+    b.periods
+      .filter((p) => p.status === "OVERDUE" || p.status === "ON_HOLD" || p.status === "PARTLY_REFUNDED" || p.status === "REFUNDED")
+      .map((p) => ({ booking: b, period: p }))
+  );
+
+  const replacementBookings = bookings.filter((b) => b.replacementOfBookingId);
+
+  function handleResolve(disputeId: string, decision: DisputeDecisionOutcome) {
+    resolveDispute(disputeId, decision);
+    toast.success(t.admin.resolveButton);
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-bold">{t.admin.title}</h1>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard
-          icon={Users}
-          label={t.admin.kpiPlacements}
-          value={stats.placementsPerMonth.at(-1)?.placements ?? 0}
-        />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <KpiCard icon={Users} label={t.admin.kpiPlacements} value={stats.placementsPerMonth.at(-1)?.placements ?? 0} />
         <KpiCard icon={Banknote} label={t.admin.kpiContractValue} value={formatMoney(stats.totalContractValue, locale)} />
-        <KpiCard icon={Receipt} label={t.admin.kpiFees} value={formatMoney(stats.totalPlatformFees, locale)} />
+        <KpiCard icon={Receipt} label={t.admin.kpiCommission} value={formatMoney(stats.totalCommission, locale)} />
         <KpiCard icon={UserCheck} label={t.admin.kpiActiveProviders} value={stats.activeProviders} />
         <KpiCard icon={Clock} label={t.admin.kpiPending} value={stats.pendingVerifications} />
+        <KpiCard icon={AlertTriangle} label={t.admin.kpiOverduePeriods} value={stats.overduePeriods} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <PlacementsChart data={stats.placementsPerMonth} />
-        <FeesChart data={stats.feesPerMonth} />
+        <CommissionChart data={stats.commissionPerMonth} />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4" /> {t.admin.disputesQueueTitle}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {openDisputes.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">{t.admin.noDisputesQueue}</p>
+          ) : (
+            openDisputes.map((d) => (
+              <div key={d.id} className="space-y-2 rounded-xl border border-border p-4">
+                <p className="text-sm font-medium">{d.description}</p>
+                <p className="text-xs text-muted-foreground">{t.disputeCategoryLabels[d.category]}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => handleResolve(d.id, "FULL_RELEASE")}>
+                    {t.admin.decisionFullRelease}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => handleResolve(d.id, "PARTIAL_RELEASE_WITH_REFUND")}>
+                    {t.admin.decisionPartialRefund}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleResolve(d.id, "FULL_REFUND")}>
+                    {t.admin.decisionFullRefund}
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -182,7 +229,7 @@ export default function AdminDashboardPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{p.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {t.categories[p.category]} &middot; {t.neighbourhoods[p.neighbourhood]}
+                    {t.categories[p.category]} &middot; {t.cities[p.city]}, {t.neighbourhoods[p.neighbourhood]}
                   </p>
                 </div>
                 <Badge variant="secondary">{t.common.pending}</Badge>
@@ -194,7 +241,58 @@ export default function AdminDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t.admin.bookingsTableTitle}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" /> {t.admin.paymentsMonitorTitle}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {flaggedPeriods.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">{t.admin.noPaymentsIssues}</p>
+          ) : (
+            flaggedPeriods.map(({ booking, period }) => (
+              <div key={period.id} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <BookingProviderName providerId={booking.providerId} />
+                  <span className="text-muted-foreground">
+                    &middot; {interpolate(t.bookingDetail.periodOf, { current: period.periodNumber, total: booking.periods.length })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold">{formatMoney(period.employerPaysTotal, locale)}</span>
+                  <Badge variant="secondary">{t.periodStatusLabels[period.status]}</Badge>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Repeat className="h-4 w-4" /> {t.admin.replacementsQueueTitle}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {replacementBookings.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">{t.admin.noReplacements}</p>
+          ) : (
+            replacementBookings.map((b) => (
+              <div key={b.id} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <BookingProviderName providerId={b.providerId} />
+                  <span className="text-muted-foreground">&middot; {t.admin.replacementLabel}</span>
+                </div>
+                <Badge variant="secondary">{t.statusLabels[b.status]}</Badge>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.admin.contractsTableTitle}</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -216,7 +314,7 @@ export default function AdminDashboardPage() {
                   <TableCell>
                     <Badge variant="secondary">{t.statusLabels[b.status]}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">{formatMoney(b.amount, locale)}</TableCell>
+                  <TableCell className="text-right">{formatMoney(bookingAmount(b), locale)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

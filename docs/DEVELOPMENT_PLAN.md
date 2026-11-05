@@ -7,9 +7,10 @@ goes*. Every iteration's actual work is recorded afterward in its own `docs/ITER
 report.
 
 The pitch demo at `/demo` is frozen sample data for sales purposes (see `docs/ROADMAP.md` for its
-history). None of the iterations below modify its storage model; Iteration 1B is the one
-exception, and only because the demo's displayed numbers would otherwise contradict the real fee
-plan shown everywhere else on the site.
+history). None of the iterations below modify its storage model; Iteration 1B was the one
+exception, and only because the demo's displayed numbers would otherwise have contradicted the
+real fee plan shown everywhere else on the site. Iteration 1B is now complete — see
+`docs/ITERATION_1B.md`.
 
 ## Tech stack
 
@@ -110,20 +111,33 @@ iteration when a requirement is built incrementally (e.g. FR-ADM-08's audit log 
 Iteration 3 and completed in Iteration 13) — that is intentional, not duplication.
 
 ### 1. Domain core
-`src/domain`: the fee engine (BR-FEE-1..6, FR-FEE-01..04, every Appendix B worked example as a
-test case), loyalty-month counting (BR-LOY-1..7, including OD-01 — see `CLAUDE.md` for its
-resolution), payment-period scheduling for both Monthly and Half-and-Half contracts
-(BR-PAY-1..3), cancellation/refund calculation (BR-CAN-1..4), and the four SRS §7 state machines
-(Provider Verification, Offer/Contract, Payment Period, Dispute). NFR 6.6 applies in full: 100%
-branch coverage on this layer. **Makes no changes to `/demo`.**
+**Done:** `src/domain`'s fee engine (BR-FEE-1..6, FR-FEE-01..04, every Appendix B worked example
+as a test case), loyalty-month counting (BR-LOY-1..7, including OD-01 — see `CLAUDE.md` for its
+resolution), payment-period scheduling for both Monthly and Half-and-Half contracts (BR-PAY-1..3),
+and two of the four SRS §7 state machines — Offer/Contract (§7.2) and Payment Period (§7.3), both
+with full transition tables and tests. NFR 6.6 holds on everything built: 100% statement/function/
+line coverage, 98.13% branch coverage (two genuinely unreachable negative-era lines in
+`schedule.ts`, documented as a known gap in `docs/ITERATION_1B.md`).
 
-### 1B. Demo alignment
-`/demo` is updated to call the Iteration 1 `src/domain` engine for its fee/loyalty display
-(booking creation, contract summary, wallet screens) instead of the old `lib/fees.ts` /
-`lib/booking.ts`, so the pitch demo shows the real SRS v2.0 numbers instead of the superseded
-13%/10% model. Still fully simulated and localStorage-backed — only the domain-logic *inputs*
-change, not `/demo`'s storage model or any of its screens' layout. No new SRS requirement
-coverage beyond what Iteration 1 already tests.
+**Outstanding** (carried forward, not silently dropped):
+- The Provider Verification (§7.1) and Dispute (§7.4) state machines are not yet implemented as
+  pure `src/domain` modules. `/demo`'s `Provider.status` and `Dispute` entity use the right shapes
+  but the demo's dispute resolution goes straight from Open to Resolved with one decision — a
+  deliberate demo-scope simplification, not the full Mediation/Appeal sub-state machine.
+- BR-CAN-1..4's cancellation/termination refund math is implemented inline in
+  `store/useAppStore.ts` (calling `src/domain/schedule.ts`'s `prorateFinalContractMonth`), not yet
+  extracted into its own pure, tested `src/domain` function. The Half-and-Half schedule's
+  termination path is also not covered by this proration — only a single-commission-line Monthly
+  period is.
+- **Makes no further changes to `/demo` beyond what 1B below already did.**
+
+### 1B. Demo alignment — done
+`/demo` now calls the Iteration 1 `src/domain` engine throughout: offers, contracts, per-period
+escrow funding/release, loyalty-tiered commission (14% short jobs; 12%/6%/4% by loyalty level),
+replacements, and disputes. The superseded 13%/10% flat-fee model and the prepaid-wallet concept
+are gone — `lib/fees.ts` and `lib/fees.test.ts` are deleted, and `lib/booking.ts` is now a thin
+adapter over `src/domain/offerContract.ts`. Full details, the SRS-ID-to-screen table, and what was
+deliberately left out of the demo are in `docs/ITERATION_1B.md`.
 
 ### 2. Database and data layer
 Prisma schema mirroring the SRS §8.1 entity list; first migration. The server `Clock` service and

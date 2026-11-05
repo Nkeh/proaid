@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useAppStore, type CreateBookingInput, type PaymentMethod } from "@/store/useAppStore";
-import type { Booking, Role } from "./types";
+import { useAppStore, type CreateOfferInput, type PaymentMethod } from "@/store/useAppStore";
+import type { Booking, DisputeCategory, Role } from "./types";
 
 function byRecent(a: Booking, b: Booking): number {
   return b.updatedAt.localeCompare(a.updatedAt);
@@ -31,32 +31,71 @@ export function useAllBookings(): Booking[] {
   return useMemo(() => bookings.slice().sort(byRecent), [bookings]);
 }
 
-export function createBooking(input: CreateBookingInput): string {
-  return useAppStore.getState().createBooking(input);
+export function makeOffer(input: CreateOfferInput): string {
+  return useAppStore.getState().makeOffer(input);
 }
 
-export function acceptBooking(id: string): void {
-  useAppStore.getState().acceptBooking(id);
+export function counterOffer(id: string, newWage: number): void {
+  useAppStore.getState().counterOffer(id, newWage);
 }
 
-export function declineBooking(id: string): void {
-  useAppStore.getState().declineBooking(id);
+export function acceptOffer(id: string): void {
+  useAppStore.getState().acceptOffer(id);
 }
 
-export function signContract(id: string, role: Role, fullName: string): void {
-  useAppStore.getState().signContract(id, role, fullName);
+export function declineOffer(id: string): void {
+  useAppStore.getState().declineOffer(id);
 }
 
-export function fundBooking(id: string, method: PaymentMethod, phoneNumber: string): boolean {
-  return useAppStore.getState().fundBooking(id, method, phoneNumber);
+export function withdrawOffer(id: string): void {
+  useAppStore.getState().withdrawOffer(id);
 }
 
-export function confirmService(id: string): void {
-  useAppStore.getState().confirmService(id);
+export function signContract(id: string, role: Role, fullName: string): string {
+  return useAppStore.getState().signContract(id, role, fullName);
 }
 
-export function cancelBooking(id: string): void {
-  useAppStore.getState().cancelBooking(id);
+export function fundPeriod(
+  bookingId: string,
+  periodId: string,
+  method: PaymentMethod,
+  phoneNumber: string
+): boolean {
+  return useAppStore.getState().fundPeriod(bookingId, periodId, method, phoneNumber);
+}
+
+export function fundShortJob(bookingId: string, method: PaymentMethod, phoneNumber: string): boolean {
+  return useAppStore.getState().fundShortJob(bookingId, method, phoneNumber);
+}
+
+export function confirmShortJobCompletion(id: string): void {
+  useAppStore.getState().confirmShortJobCompletion(id);
+}
+
+export function giveNotice(bookingId: string): void {
+  useAppStore.getState().giveNotice(bookingId);
+}
+
+export function cancelOffer(bookingId: string): void {
+  useAppStore.getState().cancelOffer(bookingId);
+}
+
+export function terminateContract(bookingId: string, reason: string): void {
+  useAppStore.getState().terminateContract(bookingId, reason);
+}
+
+export function requestReplacement(bookingId: string, newProviderId: string): string {
+  return useAppStore.getState().requestReplacement(bookingId, newProviderId);
+}
+
+export function raiseDispute(
+  bookingId: string,
+  periodId: string | undefined,
+  role: Role,
+  category: DisputeCategory,
+  description: string
+): void {
+  useAppStore.getState().raiseDispute(bookingId, periodId, role, category, description);
 }
 
 export function submitReview(id: string, rating: number, comment: string): void {
@@ -65,8 +104,4 @@ export function submitReview(id: string, rating: number, comment: string): void 
 
 export function sendMessage(bookingId: string, role: Role, senderName: string, text: string): void {
   useAppStore.getState().sendMessage(bookingId, role, senderName, text);
-}
-
-export function fastForwardToMonth6(bookingId: string): void {
-  useAppStore.getState().fastForwardToMonth6(bookingId);
 }

@@ -11,29 +11,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { InitialsAvatar } from "@/components/brand/initials-avatar";
 import { FeeBreakdownCard } from "@/components/booking/fee-breakdown-card";
 import { useT, useLocale } from "@/lib/i18n";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { useProviderById } from "@/lib/data/providers";
-import { createBooking } from "@/lib/data/bookings";
+import { makeOffer } from "@/lib/data/bookings";
+import { useLoyaltySummary } from "@/lib/data/loyalty";
+import { useDemoDate } from "@/lib/data/clock";
 import { useRequireRole } from "@/lib/hooks/use-require-role";
-import type { ContractType } from "@/lib/fees";
+import { CURRENT_EMPLOYER_ID } from "@/store/useAppStore";
+import type { ContractKind, ScheduleType } from "@/lib/data/types";
+import { addMonthsClamped, addDays } from "@/src/domain/schedule";
 import { cn } from "@/lib/utils";
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export default function BookingFormPage() {
+export default function MakeOfferPage() {
   useRequireRole("EMPLOYER");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const t = useT();
   const locale = useLocale();
   const provider = useProviderById(id);
+  const demoDate = useDemoDate();
+  const loyalty = useLoyaltySummary(CURRENT_EMPLOYER_ID);
 
-  const [contractType, setContractType] = useState<ContractType>("MONTHLY");
-  const [startDate, setStartDate] = useState(todayIso());
+  const [contractKind, setContractKind] = useState<ContractKind>("LONG_CONTRACT");
+  const [scheduleType, setScheduleType] = useState<ScheduleType>("MONTHLY");
+  const [startDate, setStartDate] = useState(demoDate);
   const [durationMonths, setDurationMonths] = useState(6);
-  const [amount, setAmount] = useState(provider?.monthlyRate ?? 0);
+  const [wage, setWage] = useState(provider?.monthlyRate ?? 0);
   const [notes, setNotes] = useState("");
 
   if (!provider) {
@@ -44,17 +47,24 @@ export default function BookingFormPage() {
     );
   }
 
+  const isHalfAndHalf = contractKind === "LONG_CONTRACT" && scheduleType === "HALF_AND_HALF";
+  const oddDuration = isHalfAndHalf && durationMonths % 2 !== 0;
+  const endDate = contractKind === "LONG_CONTRACT" ? addDays(addMonthsClamped(startDate, durationMonths), -1) : undefined;
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const bookingId = createBooking({
+    if (oddDuration) return;
+    const bookingId = makeOffer({
       providerId: provider!.id,
-      contractType,
+      contractKind,
+      scheduleType: contractKind === "LONG_CONTRACT" ? scheduleType : undefined,
       startDate,
-      durationMonths: contractType === "SHORT_TERM" ? 1 : durationMonths,
-      amount,
+      durationMonths: contractKind === "SHORT_JOB" ? 1 : durationMonths,
+      endDate,
+      wage,
       notes,
     });
-    toast.success(t.bookingForm.successToast);
+    toast.success(t.offerForm.successToast);
     router.push(`/demo/booking/${bookingId}`);
   }
 
@@ -64,9 +74,9 @@ export default function BookingFormPage() {
         <InitialsAvatar initials={provider.initials} color={provider.avatarColor} size="lg" />
         <div>
           <h1 className="text-xl font-bold">
-            {t.bookingForm.title} {provider.name}
+            {t.offerForm.title} - {provider.name}
           </h1>
-          <p className="text-sm text-muted-foreground">{t.bookingForm.subtitle}</p>
+          <p className="text-sm text-muted-foreground">{t.offerForm.subtitle}</p>
         </div>
       </div>
 
@@ -75,34 +85,62 @@ export default function BookingFormPage() {
           <Card>
             <CardContent className="space-y-5 pt-6">
               <div className="space-y-2">
-                <Label>{t.bookingForm.contractType}</Label>
+                <Label>{t.offerForm.contractKind}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setContractType("SHORT_TERM")}
+                    onClick={() => setContractKind("SHORT_JOB")}
                     className={cn(
                       "h-16 rounded-xl border-2 text-sm font-semibold transition-colors",
-                      contractType === "SHORT_TERM" ? "border-primary bg-primary/10 text-primary" : "border-border"
+                      contractKind === "SHORT_JOB" ? "border-primary bg-primary/10 text-primary" : "border-border"
                     )}
                   >
-                    {t.bookingForm.shortTerm}
+                    {t.offerForm.shortJob}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setContractType("MONTHLY")}
+                    onClick={() => setContractKind("LONG_CONTRACT")}
                     className={cn(
                       "h-16 rounded-xl border-2 text-sm font-semibold transition-colors",
-                      contractType === "MONTHLY" ? "border-primary bg-primary/10 text-primary" : "border-border"
+                      contractKind === "LONG_CONTRACT" ? "border-primary bg-primary/10 text-primary" : "border-border"
                     )}
                   >
-                    {t.bookingForm.monthly}
+                    {t.offerForm.longContract}
                   </button>
                 </div>
               </div>
 
+              {contractKind === "LONG_CONTRACT" && (
+                <div className="space-y-2">
+                  <Label>{t.offerForm.scheduleType}</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleType("MONTHLY")}
+                      className={cn(
+                        "h-12 rounded-xl border-2 text-sm font-semibold transition-colors",
+                        scheduleType === "MONTHLY" ? "border-primary bg-primary/10 text-primary" : "border-border"
+                      )}
+                    >
+                      {t.offerForm.monthlySchedule}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleType("HALF_AND_HALF")}
+                      className={cn(
+                        "h-12 rounded-xl border-2 text-sm font-semibold transition-colors",
+                        scheduleType === "HALF_AND_HALF" ? "border-primary bg-primary/10 text-primary" : "border-border"
+                      )}
+                    >
+                      {t.offerForm.halfAndHalfSchedule}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="startDate">{t.bookingForm.startDate}</Label>
+                  <Label htmlFor="startDate">{t.offerForm.startDate}</Label>
                   <Input
                     id="startDate"
                     type="date"
@@ -111,9 +149,9 @@ export default function BookingFormPage() {
                     required
                   />
                 </div>
-                {contractType === "MONTHLY" && (
+                {contractKind === "LONG_CONTRACT" && (
                   <div className="space-y-2">
-                    <Label htmlFor="duration">{t.bookingForm.durationMonths}</Label>
+                    <Label htmlFor="duration">{t.offerForm.durationMonths}</Label>
                     <Input
                       id="duration"
                       type="number"
@@ -127,15 +165,23 @@ export default function BookingFormPage() {
                 )}
               </div>
 
+              {oddDuration && <p className="text-sm text-destructive">{t.offerForm.oddDurationError}</p>}
+
+              {contractKind === "LONG_CONTRACT" && endDate && (
+                <p className="text-xs text-muted-foreground">
+                  {t.offerForm.endDate}: {formatDate(endDate, locale)}
+                </p>
+              )}
+
               <div className="space-y-2">
-                <Label htmlFor="amount">{t.bookingForm.agreedAmount}</Label>
+                <Label htmlFor="wage">{t.offerForm.wageAmount}</Label>
                 <Input
-                  id="amount"
+                  id="wage"
                   type="number"
                   min={0}
                   step={1000}
-                  value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                  value={wage}
+                  onChange={(e) => setWage(Number(e.target.value) || 0)}
                   required
                 />
                 <p className="text-xs text-muted-foreground">
@@ -145,13 +191,13 @@ export default function BookingFormPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="notes">
-                  {t.bookingForm.notes} <span className="text-muted-foreground">({t.common.optional})</span>
+                  {t.offerForm.notes} <span className="text-muted-foreground">({t.common.optional})</span>
                 </Label>
                 <Textarea
                   id="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder={t.bookingForm.notesPlaceholder}
+                  placeholder={t.offerForm.notesPlaceholder}
                   rows={4}
                 />
               </div>
@@ -160,9 +206,14 @@ export default function BookingFormPage() {
         </div>
 
         <div className="space-y-4">
-          <FeeBreakdownCard contractType={contractType} amount={amount} monthNumber={1} />
-          <Button type="submit" size="lg" className="h-12 w-full">
-            {t.bookingForm.submitButton}
+          <FeeBreakdownCard
+            contractKind={contractKind}
+            wage={wage}
+            loyaltyMonthNumber={loyalty.reservedMonths + 1}
+          />
+          <p className="text-xs text-muted-foreground">{t.offerForm.fundingWindowNote}</p>
+          <Button type="submit" size="lg" className="h-12 w-full" disabled={oddDuration}>
+            {t.offerForm.submitButton}
           </Button>
         </div>
       </form>

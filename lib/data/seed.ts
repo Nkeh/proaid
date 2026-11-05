@@ -1,15 +1,21 @@
+import { SRS_V2_FEE_CONFIG, calculateShortJobFee } from "@/src/domain/fees";
+import type { LoyaltyMonthRecord } from "@/src/domain/loyalty";
+import { addDays, addMonthsClamped, generateMonthlyPeriods } from "@/src/domain/schedule";
 import type {
   AdminStats,
   Booking,
+  CommissionStat,
   Employer,
-  FeeStat,
   PlacementStat,
   Provider,
+  Referee,
   SubmittedDocument,
   Transaction,
-  VerificationChecklist,
-  Wallet,
+  VettingChecklist,
 } from "./types";
+
+/** The demo's fixed "business clock" default — see store/useAppStore.ts's `demoDate`. */
+export const DEMO_TODAY = "2026-11-05";
 
 const AVATAR_COLORS = [
   "#0F5E5A",
@@ -35,40 +41,49 @@ function colorFor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length]!;
 }
 
-function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
+function daysAgoFrom(today: string, n: number): string {
+  // today is "YYYY-MM-DD"; this only needs to produce a plausible past ISO date for seed display,
+  // so a simple calendar-day subtraction via Date is acceptable here (seed data, not domain logic).
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString();
 }
 
-const FULL_VERIFICATION: VerificationChecklist = {
-  idVerified: true,
-  referencesConfirmed: true,
-  medicalCertificate: true,
-  skillsCheck: true,
+const FULL_VETTING: VettingChecklist = {
+  identityConfirmed: "PASS",
+  criminalRecordClear: "PASS",
+  referee1Confirmed: "PASS",
+  referee2Confirmed: "PASS",
+  medicalFitness: "PASS",
+  skillsConfirmed: "PASS",
 };
 
-const PARTIAL_VERIFICATION: VerificationChecklist = {
-  idVerified: true,
-  referencesConfirmed: false,
-  medicalCertificate: false,
-  skillsCheck: false,
+const PARTIAL_VETTING: VettingChecklist = {
+  identityConfirmed: "PASS",
+  criminalRecordClear: "PENDING",
+  referee1Confirmed: "PENDING",
+  referee2Confirmed: "PENDING",
+  medicalFitness: "PENDING",
+  skillsConfirmed: "PENDING",
 };
+
+const DEFAULT_REFEREES: Referee[] = [
+  { name: "Referee One", phone: "+237 650 00 00 01", relationship: "Former employer", yearsKnown: 3 },
+  { name: "Referee Two", phone: "+237 650 00 00 02", relationship: "Family friend", yearsKnown: 5 },
+];
 
 function approvedDocuments(): SubmittedDocument[] {
   return [
     { id: "idCard", labelKey: "idCard", status: "SUBMITTED" },
-    { id: "proofOfAddress", labelKey: "proofOfAddress", status: "SUBMITTED" },
-    { id: "referenceLetter", labelKey: "referenceLetter", status: "SUBMITTED" },
-    { id: "medicalCertificate", labelKey: "medicalCertificate", status: "SUBMITTED" },
+    { id: "criminalRecord", labelKey: "criminalRecord", status: "SUBMITTED", expiresOn: "2027-06-01" },
+    { id: "medicalCertificate", labelKey: "medicalCertificate", status: "SUBMITTED", expiresOn: "2027-06-01" },
   ];
 }
 
 function pendingDocuments(): SubmittedDocument[] {
   return [
     { id: "idCard", labelKey: "idCard", status: "SUBMITTED" },
-    { id: "proofOfAddress", labelKey: "proofOfAddress", status: "SUBMITTED" },
-    { id: "referenceLetter", labelKey: "referenceLetter", status: "MISSING" },
+    { id: "criminalRecord", labelKey: "criminalRecord", status: "MISSING" },
     { id: "medicalCertificate", labelKey: "medicalCertificate", status: "MISSING" },
   ];
 }
@@ -76,6 +91,7 @@ function pendingDocuments(): SubmittedDocument[] {
 interface ProviderSeed {
   name: string;
   category: Provider["category"];
+  city: Provider["city"];
   neighbourhood: Provider["neighbourhood"];
   yearsExperience: number;
   languages: Provider["languages"];
@@ -88,6 +104,7 @@ interface ProviderSeed {
   skillsFr: string[];
   rating: number;
   status?: Provider["status"];
+  availability?: Provider["availability"];
   reviews: {
     authorName: string;
     rating: number;
@@ -102,6 +119,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Grace Mbah",
     category: "NANNY",
+    city: "DOUALA",
     neighbourhood: "BONAMOUSSADI",
     yearsExperience: 6,
     languages: ["ENGLISH", "FRENCH", "PIDGIN"],
@@ -113,6 +131,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
     skills: ["Infant care", "Homework help", "First aid certified", "Meal prep for kids"],
     skillsFr: ["Soins aux nourrissons", "Aide aux devoirs", "Certifiée premiers secours", "Préparation des repas pour enfants"],
     rating: 4.8,
+    availability: "ENGAGED",
     reviews: [
       {
         authorName: "Mireille T.",
@@ -128,19 +147,13 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
         commentFr: "Excellente communication et très fiable. Je recommande vivement.",
         daysAgo: 95,
       },
-      {
-        authorName: "Astrid N.",
-        rating: 4,
-        comment: "Great with homework routines. Sometimes arrives a few minutes late.",
-        commentFr: "Très bonne avec les devoirs. Arrive parfois quelques minutes en retard.",
-        daysAgo: 150,
-      },
     ],
     phone: "+237 677 12 34 56",
   },
   {
     name: "Solange Fomekong",
     category: "NANNY",
+    city: "DOUALA",
     neighbourhood: "BONAPRISO",
     yearsExperience: 4,
     languages: ["FRENCH", "PIDGIN"],
@@ -159,19 +172,13 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
         commentFr: "Solange s'est installée chez nous et la transition a été facile pour notre bébé.",
         daysAgo: 60,
       },
-      {
-        authorName: "Linda A.",
-        rating: 4,
-        comment: "Reliable and caring, communicates mostly in French.",
-        commentFr: "Fiable et attentionnée, communique surtout en français.",
-        daysAgo: 130,
-      },
     ],
     phone: "+237 691 22 33 44",
   },
   {
     name: "Blandine Ngo Bitang",
     category: "NANNY",
+    city: "DOUALA",
     neighbourhood: "AKWA",
     yearsExperience: 8,
     languages: ["ENGLISH", "FRENCH", "PIDGIN"],
@@ -182,7 +189,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
     skills: ["School-age supervision", "Tutoring basics", "Meal planning"],
     skillsFr: ["Supervision scolaire", "Bases du soutien scolaire", "Planification des repas"],
     rating: 4.9,
-    status: "PENDING_VERIFICATION",
+    status: "UNDER_REVIEW",
     reviews: [
       {
         authorName: "Chantal M.",
@@ -197,6 +204,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Marthe Ngassa",
     category: "HOUSE_HELP",
+    city: "DOUALA",
     neighbourhood: "DEIDO",
     yearsExperience: 5,
     languages: ["FRENCH", "PIDGIN"],
@@ -222,6 +230,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Odette Kemadjou",
     category: "HOUSE_HELP",
+    city: "DOUALA",
     neighbourhood: "BONABERI",
     yearsExperience: 2,
     languages: ["FRENCH"],
@@ -246,6 +255,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Pauline Essomba",
     category: "HOUSE_HELP",
+    city: "DOUALA",
     neighbourhood: "KOTTO",
     yearsExperience: 7,
     languages: ["ENGLISH", "FRENCH", "PIDGIN"],
@@ -270,6 +280,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Jacqueline Ndive",
     category: "COOK",
+    city: "DOUALA",
     neighbourhood: "BONANJO",
     yearsExperience: 9,
     languages: ["ENGLISH", "FRENCH"],
@@ -280,6 +291,7 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
     skills: ["Cameroonian cuisine", "Meal planning", "Food hygiene certified"],
     skillsFr: ["Cuisine camerounaise", "Planification des repas", "Certifiée en hygiène alimentaire"],
     rating: 4.9,
+    availability: "ENGAGED",
     reviews: [
       {
         authorName: "Esther N.",
@@ -288,19 +300,13 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
         commentFr: "Le ndolé de Jacqueline est le meilleur qu'on ait mangé - toujours à l'heure et une cuisine impeccable.",
         daysAgo: 25,
       },
-      {
-        authorName: "Marc L.",
-        rating: 5,
-        comment: "Very professional, adapts menus to dietary needs easily.",
-        commentFr: "Très professionnelle, adapte facilement les menus aux besoins alimentaires.",
-        daysAgo: 110,
-      },
     ],
     phone: "+237 674 88 99 00",
   },
   {
     name: "Florence Abena",
     category: "COOK",
+    city: "DOUALA",
     neighbourhood: "LOGPOM",
     yearsExperience: 3,
     languages: ["FRENCH", "PIDGIN"],
@@ -323,33 +329,9 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
     phone: "+237 697 99 00 11",
   },
   {
-    name: "Emmanuel Nkeng",
-    category: "COOK",
-    neighbourhood: "NDOGBONG",
-    yearsExperience: 5,
-    languages: ["ENGLISH", "PIDGIN"],
-    workType: "LIVE_OUT",
-    monthlyRate: 95_000,
-    bio: "Versatile cook trained in both local and continental dishes, previously worked for an expatriate family.",
-    bioFr: "Cuisinier polyvalent formé à la cuisine locale et continentale, a précédemment travaillé pour une famille expatriée.",
-    skills: ["Continental cuisine", "Meal planning", "Grocery management"],
-    skillsFr: ["Cuisine continentale", "Planification des repas", "Gestion des courses"],
-    rating: 4.6,
-    status: "PENDING_VERIFICATION",
-    reviews: [
-      {
-        authorName: "James O.",
-        rating: 5,
-        comment: "Cooked for our family for two years before we relocated - excellent cook.",
-        commentFr: "A cuisiné pour notre famille pendant deux ans avant notre déménagement - excellent cuisinier.",
-        daysAgo: 400,
-      },
-    ],
-    phone: "+237 679 00 11 22",
-  },
-  {
     name: "Agnes Tabe",
     category: "ELDERLY_CAREGIVER",
+    city: "DOUALA",
     neighbourhood: "BONAMOUSSADI",
     yearsExperience: 10,
     languages: ["ENGLISH", "FRENCH", "PIDGIN"],
@@ -368,19 +350,13 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
         commentFr: "Agnes s'occupe de ma mère avec une patience et un professionnalisme incroyables.",
         daysAgo: 55,
       },
-      {
-        authorName: "Clarisse B.",
-        rating: 5,
-        comment: "Could not have asked for a better caregiver for my grandmother.",
-        commentFr: "Je ne pouvais pas espérer une meilleure aidante pour ma grand-mère.",
-        daysAgo: 200,
-      },
     ],
     phone: "+237 654 11 22 33",
   },
   {
     name: "Celestine Mballa",
     category: "ELDERLY_CAREGIVER",
+    city: "DOUALA",
     neighbourhood: "MAKEPE",
     yearsExperience: 6,
     languages: ["FRENCH", "PIDGIN"],
@@ -405,7 +381,8 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Delphine Njoya",
     category: "ELDERLY_CAREGIVER",
-    neighbourhood: "AKWA",
+    city: "BAMENDA",
+    neighbourhood: "NKWEN",
     yearsExperience: 4,
     languages: ["ENGLISH", "FRENCH"],
     workType: "LIVE_OUT",
@@ -415,20 +392,14 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
     skills: ["Daytime support", "Appointment accompaniment", "Meal prep"],
     skillsFr: ["Accompagnement en journée", "Accompagnement aux rendez-vous", "Préparation des repas"],
     rating: 4.5,
-    reviews: [
-      {
-        authorName: "Nadine P.",
-        rating: 4,
-        comment: "Very attentive and communicates well with the family.",
-        commentFr: "Très attentive et communique bien avec la famille.",
-        daysAgo: 45,
-      },
-    ],
+    status: "INTERVIEW_SCHEDULED",
+    reviews: [],
     phone: "+237 676 33 44 55",
   },
   {
     name: "Honoré Biya Essiane",
     category: "HOUSEMATE_SUPPORT",
+    city: "DOUALA",
     neighbourhood: "BONAPRISO",
     yearsExperience: 3,
     languages: ["ENGLISH", "FRENCH", "PIDGIN"],
@@ -453,7 +424,8 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   {
     name: "Sandrine Owona",
     category: "HOUSEMATE_SUPPORT",
-    neighbourhood: "KOTTO",
+    city: "BAMENDA",
+    neighbourhood: "UP_STATION",
     yearsExperience: 2,
     languages: ["FRENCH", "PIDGIN"],
     workType: "PART_TIME",
@@ -476,16 +448,18 @@ const PROVIDER_SEEDS: ProviderSeed[] = [
   },
 ];
 
-export function buildProviders(): Provider[] {
+export function buildProviders(today: string = DEMO_TODAY): Provider[] {
   return PROVIDER_SEEDS.map((seed, index) => {
     const status = seed.status ?? "APPROVED";
     const id = `provider-${index + 1}`;
+    const isApproved = status === "APPROVED";
     return {
       id,
       name: seed.name,
       initials: initialsOf(seed.name),
       avatarColor: colorFor(index),
       category: seed.category,
+      city: seed.city,
       neighbourhood: seed.neighbourhood,
       yearsExperience: seed.yearsExperience,
       languages: seed.languages,
@@ -496,7 +470,8 @@ export function buildProviders(): Provider[] {
       bioFr: seed.bioFr,
       skills: seed.skills,
       skillsFr: seed.skillsFr,
-      verification: status === "APPROVED" ? FULL_VERIFICATION : PARTIAL_VERIFICATION,
+      vetting: isApproved ? FULL_VETTING : PARTIAL_VETTING,
+      referees: DEFAULT_REFEREES,
       rating: seed.rating,
       reviews: seed.reviews.map((r, rIndex) => ({
         id: `${id}-review-${rIndex + 1}`,
@@ -504,12 +479,14 @@ export function buildProviders(): Provider[] {
         rating: r.rating,
         comment: r.comment,
         commentFr: r.commentFr,
-        date: daysAgo(r.daysAgo),
+        date: daysAgoFrom(today, r.daysAgo),
       })),
       status,
+      availability: seed.availability ?? "AVAILABLE",
+      interviewSlot: status === "INTERVIEW_SCHEDULED" ? daysAgoFrom(today, -3) : undefined,
       phone: seed.phone,
       momoNumber: seed.phone,
-      documents: status === "APPROVED" ? approvedDocuments() : pendingDocuments(),
+      documents: isApproved ? approvedDocuments() : pendingDocuments(),
     };
   });
 }
@@ -523,30 +500,95 @@ export function buildEmployer(): Employer {
     name: "Mrs. Esther Ngwa",
     initials: "EN",
     avatarColor: "#0F5E5A",
+    city: "DOUALA",
     neighbourhood: "BONAMOUSSADI",
     phone: "+237 670 12 34 56",
+    shortlistedProviderIds: [],
   };
 }
 
 export const EMPLOYER_ID = "employer-1";
 export const ADMIN_NAME = "ProAid Admin";
 
-export function buildSeedBooking(): Booking {
-  const topUpDate = daysAgo(55);
-  return {
-    id: "booking-seed-1",
+/**
+ * Seed scenario: the employer already has 10 funded loyalty months from an earlier contract
+ * (lightweight synthetic backfill — no fully-modeled booking behind it, per the approved plan),
+ * plus an active 6-month Monthly nanny contract (Jacqueline Ndive) continuing from loyalty
+ * month 11, two periods already funded.
+ */
+export function buildSeedLoyaltyAndBooking(today: string = DEMO_TODAY): {
+  loyaltyHistory: LoyaltyMonthRecord[];
+  booking: Booking;
+} {
+  const backfill: LoyaltyMonthRecord[] = Array.from({ length: 10 }, (_, i) => ({
+    loyaltyMonthNumber: i + 1,
+    employerId: EMPLOYER_ID,
+    contractId: "prior-contract-seed",
+    contractMonthNumber: i + 1,
+    monthStartDate: daysAgoFrom(today, (10 - i) * 30),
+    state: "FUNDED" as const,
+  }));
+
+  const contractId = "booking-seed-1";
+  const startDate = daysAgoFrom(today, 60).slice(0, 10);
+  const { periods, loyaltyRecords } = generateMonthlyPeriods(
+    EMPLOYER_ID,
+    contractId,
+    startDate,
+    6,
+    120_000,
+    backfill,
+    SRS_V2_FEE_CONFIG
+  );
+
+  // Fund and release the first two periods; leave the rest as generated (awaiting funding).
+  // Period 2 is FUNDED with its payment date set to tomorrow: dispute-raisable right now, and one
+  // clock-advance (1 day) auto-releases it per BR-PAY-5. Period 3's funding window end is set to
+  // today: one clock-advance (1 day) flips it to Overdue per BR-PAY-4.
+  const fundedPeriods = periods.map((period, index) => {
+    if (index === 0) {
+      return { ...period, id: `${contractId}-period-1`, status: "RELEASED" as const };
+    }
+    if (index === 1) {
+      return {
+        ...period,
+        id: `${contractId}-period-2`,
+        status: "FUNDED" as const,
+        paymentDate: addDays(today, 1),
+      };
+    }
+    if (index === 2) {
+      return {
+        ...period,
+        id: `${contractId}-period-${index + 1}`,
+        status: "AWAITING_FUNDING" as const,
+        fundingWindowEndDate: today,
+      };
+    }
+    return { ...period, id: `${contractId}-period-${index + 1}`, status: "AWAITING_FUNDING" as const };
+  });
+
+  const loyaltyHistory = [
+    ...backfill,
+    { ...loyaltyRecords[0], state: "FUNDED" as const },
+    { ...loyaltyRecords[1], state: "FUNDED" as const },
+    ...loyaltyRecords.slice(2),
+  ];
+
+  const booking: Booking = {
+    id: contractId,
     providerId: JACQUELINE_NDIVE_ID,
     employerId: EMPLOYER_ID,
     category: "COOK",
-    contractType: "MONTHLY",
-    status: "FUNDED",
-    startDate: daysAgo(50),
+    contractKind: "LONG_CONTRACT",
+    scheduleType: "MONTHLY",
+    status: "ACTIVE",
+    startDate,
     durationMonths: 6,
-    currentMonth: 2,
-    amount: 120_000,
+    wage: 120_000,
     notes: "Weekday lunches and dinners for a family of four. Mild spice preferred.",
-    employerSignature: { signed: true, fullName: "Esther Ngwa", timestamp: topUpDate },
-    providerSignature: { signed: true, fullName: "Jacqueline Ndive", timestamp: topUpDate },
+    employerSignature: { signed: true, fullName: "Esther Ngwa", timestamp: daysAgoFrom(today, 61) },
+    providerSignature: { signed: true, fullName: "Jacqueline Ndive", timestamp: daysAgoFrom(today, 61) },
     messages: [
       {
         id: "booking-seed-1-msg-1",
@@ -554,7 +596,7 @@ export function buildSeedBooking(): Booking {
         senderName: "Mrs. Esther Ngwa",
         text: "Hi Jacqueline, excited to have you starting this week!",
         textFr: "Bonjour Jacqueline, ravie de vous avoir dès cette semaine !",
-        timestamp: daysAgo(50),
+        timestamp: daysAgoFrom(today, 60),
       },
       {
         id: "booking-seed-1-msg-2",
@@ -562,133 +604,213 @@ export function buildSeedBooking(): Booking {
         senderName: "Jacqueline Ndive",
         text: "Thank you Mrs. Ngwa, looking forward to it. Any allergies I should know about?",
         textFr: "Merci Mme Ngwa, j'ai hâte. Y a-t-il des allergies que je devrais connaître ?",
-        timestamp: daysAgo(49),
-      },
-      {
-        id: "booking-seed-1-msg-3",
-        senderRole: "EMPLOYER",
-        senderName: "Mrs. Esther Ngwa",
-        text: "No allergies, just mild spice for the kids please.",
-        textFr: "Aucune allergie, juste peu épicé pour les enfants s'il vous plaît.",
-        timestamp: daysAgo(49),
+        timestamp: daysAgoFrom(today, 59),
       },
     ],
-    createdAt: daysAgo(51),
-    updatedAt: daysAgo(5),
+    periods: fundedPeriods,
+    offerRounds: 0,
+    createdAt: daysAgoFrom(today, 62),
+    updatedAt: daysAgoFrom(today, 30),
   };
+
+  return { loyaltyHistory, booking };
 }
 
-export function buildWalletAndTransactions(booking: Booking): Wallet {
+/** Seed scenario: a completed one-off short job (BR-FEE-1: flat 14% commission, paid once). */
+export function buildSeedShortJobBooking(today: string = DEMO_TODAY): {
+  booking: Booking;
+  transactions: Transaction[];
+} {
+  const bookingId = "booking-seed-2";
+  const wage = 30_000;
+  const fee = calculateShortJobFee(wage, SRS_V2_FEE_CONFIG);
+  const startDate = daysAgoFrom(today, 5).slice(0, 10);
+  const signedAt = daysAgoFrom(today, 5);
+  const completedAt = daysAgoFrom(today, 4);
+
+  const booking: Booking = {
+    id: bookingId,
+    providerId: GRACE_MBAH_ID,
+    employerId: EMPLOYER_ID,
+    category: "NANNY",
+    contractKind: "SHORT_JOB",
+    status: "COMPLETED",
+    startDate,
+    durationMonths: 1,
+    wage,
+    notes: "One Saturday evening of babysitting for a birthday party.",
+    employerSignature: { signed: true, fullName: "Esther Ngwa", timestamp: signedAt },
+    providerSignature: { signed: true, fullName: "Grace Mbah", timestamp: signedAt },
+    messages: [],
+    periods: [],
+    offerRounds: 0,
+    createdAt: daysAgoFrom(today, 6),
+    updatedAt: completedAt,
+  };
+
   const transactions: Transaction[] = [
     {
-      id: "txn-1",
+      id: `${bookingId}-txn-fund`,
       type: "FUNDING",
-      bookingId: null,
-      amount: 1_000_000,
-      description: "Wallet top-up via MTN MoMo",
-      descriptionFr: "Rechargement du portefeuille via MTN MoMo",
-      timestamp: daysAgo(55),
-      reference: "MOMO-TOPUP-88213",
+      bookingId,
+      amount: fee.employerPays,
+      description: "Short job funded",
+      descriptionFr: "Travail ponctuel financé",
+      timestamp: signedAt,
+      reference: "MOMO-FUND-2000",
     },
     {
-      id: "txn-2",
-      type: "FUNDING",
-      bookingId: booking.id,
-      amount: 120_000,
-      description: "Escrow funded for Jacqueline Ndive - month 1",
-      descriptionFr: "Escrow financé pour Jacqueline Ndive - mois 1",
-      timestamp: daysAgo(50),
-      reference: "MOMO-FUND-10234",
+      id: `${bookingId}-txn-commission`,
+      type: "COMMISSION",
+      bookingId,
+      amount: fee.commission,
+      description: "Commission recognized, short job",
+      descriptionFr: "Commission reconnue, travail ponctuel",
+      timestamp: signedAt,
+      reference: "COMM-2000",
     },
     {
-      id: "txn-3",
-      type: "FEE",
-      bookingId: booking.id,
-      amount: 15_600,
-      description: "Platform fee - Jacqueline Ndive, month 1",
-      descriptionFr: "Frais de plateforme - Jacqueline Ndive, mois 1",
-      timestamp: daysAgo(20),
-      reference: "FEE-10234",
-    },
-    {
-      id: "txn-4",
+      id: `${bookingId}-txn-payout`,
       type: "PAYOUT",
-      bookingId: booking.id,
-      amount: 104_400,
-      description: "Payout to Jacqueline Ndive - month 1",
-      descriptionFr: "Paiement à Jacqueline Ndive - mois 1",
-      timestamp: daysAgo(20),
-      reference: "PAYOUT-10234",
-    },
-    {
-      id: "txn-5",
-      type: "FUNDING",
-      bookingId: booking.id,
-      amount: 120_000,
-      description: "Escrow funded for Jacqueline Ndive - month 2",
-      descriptionFr: "Escrow financé pour Jacqueline Ndive - mois 2",
-      timestamp: daysAgo(5),
-      reference: "MOMO-FUND-10298",
+      bookingId,
+      amount: wage,
+      description: "Payout, short job completed",
+      descriptionFr: "Paiement, travail ponctuel terminé",
+      timestamp: completedAt,
+      reference: "PAYOUT-2000",
     },
   ];
 
-  const totalIn = transactions
-    .filter((t) => t.type === "FUNDING")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalOutOfBalance = transactions
-    .filter((t) => t.type === "FUNDING" && t.bookingId !== null)
-    .reduce((sum, t) => sum + t.amount, 0);
-  const topUps = transactions
-    .filter((t) => t.type === "FUNDING" && t.bookingId === null)
-    .reduce((sum, t) => sum + t.amount, 0);
+  return { booking, transactions };
+}
 
-  const balance = topUps - totalOutOfBalance;
-  const escrowHeld = booking.status === "FUNDED" || booking.status === "ACCEPTED" || booking.status === "CONTRACT_SIGNED"
-    ? 120_000
-    : 0;
+/**
+ * Seed scenario: a 4-month Half and Half long contract offer awaiting the provider's signature
+ * (employer has already signed) — demonstrates BR-PAY-3's twice-per-contract funding schedule
+ * before any period exists (periods are only generated once both parties have signed).
+ */
+export function buildSeedHalfAndHalfOffer(today: string = DEMO_TODAY): Booking {
+  const bookingId = "booking-seed-3";
+  const durationMonths = 4;
+  const startDate = addDays(today, 7);
+  const endDate = addDays(addMonthsClamped(startDate, durationMonths), -1);
+  const signedAt = daysAgoFrom(today, 0);
 
-  void totalIn;
+  const booking: Booking = {
+    id: bookingId,
+    providerId: GRACE_MBAH_ID,
+    employerId: EMPLOYER_ID,
+    category: "NANNY",
+    contractKind: "LONG_CONTRACT",
+    scheduleType: "HALF_AND_HALF",
+    status: "PENDING_SIGNATURES",
+    startDate,
+    durationMonths,
+    endDate,
+    wage: 75_000,
+    notes: "Part-time holiday-season childcare, four-month contract paid in two halves.",
+    employerSignature: { signed: true, fullName: "Esther Ngwa", timestamp: signedAt },
+    providerSignature: { signed: false, fullName: null, timestamp: null },
+    messages: [
+      {
+        id: `${bookingId}-msg-1`,
+        senderRole: "EMPLOYER",
+        senderName: "Mrs. Esther Ngwa",
+        text: "Hi Grace, here's the four-month offer we discussed, paid in two halves.",
+        textFr: "Bonjour Grace, voici l'offre de quatre mois dont nous avons parlé, payée en deux moitiés.",
+        timestamp: signedAt,
+      },
+    ],
+    periods: [],
+    offerRounds: 0,
+    createdAt: signedAt,
+    updatedAt: signedAt,
+  };
 
-  return { balance, escrowHeld, transactions };
+  return booking;
+}
+
+export function buildSeedTransactions(booking: Booking): Transaction[] {
+  const transactions: Transaction[] = [];
+  booking.periods.forEach((period, index) => {
+    if (period.status === "RELEASED" || period.status === "FUNDED") {
+      transactions.push({
+        id: `txn-fund-${index + 1}`,
+        type: "FUNDING",
+        bookingId: booking.id,
+        amount: period.employerPaysTotal,
+        description: `Period ${index + 1} funded`,
+        descriptionFr: `Période ${index + 1} financée`,
+        timestamp: period.startDate,
+        reference: `MOMO-FUND-${1000 + index}`,
+      });
+      transactions.push({
+        id: `txn-commission-${index + 1}`,
+        type: "COMMISSION",
+        bookingId: booking.id,
+        amount: period.commissionTotal,
+        description: `Commission recognized, period ${index + 1}`,
+        descriptionFr: `Commission reconnue, période ${index + 1}`,
+        timestamp: period.startDate,
+        reference: `COMM-${1000 + index}`,
+      });
+    }
+    if (period.status === "RELEASED") {
+      transactions.push({
+        id: `txn-payout-${index + 1}`,
+        type: "PAYOUT",
+        bookingId: booking.id,
+        amount: period.wageTotal,
+        description: `Payout to provider, period ${index + 1}`,
+        descriptionFr: `Paiement au prestataire, période ${index + 1}`,
+        timestamp: period.paymentDate,
+        reference: `PAYOUT-${1000 + index}`,
+      });
+    }
+  });
+  return transactions;
 }
 
 const PLACEMENT_COUNTS = [4, 7, 9, 14, 18, 23];
-const FEE_COUNTS = [95_000, 158_000, 203_000, 312_000, 398_000, 512_000];
+const COMMISSION_COUNTS = [95_000, 158_000, 203_000, 312_000, 398_000, 512_000];
 
-export function buildAdminStats(providers: Provider[]): AdminStats {
-  const now = new Date();
+export function buildAdminStats(
+  providers: Provider[],
+  overduePeriods: number,
+  openDisputes: number
+): AdminStats {
+  const now = new Date(`${DEMO_TODAY}T00:00:00Z`);
   const placementsPerMonth: PlacementStat[] = PLACEMENT_COUNTS.map((count, idx) => {
     const monthsBack = PLACEMENT_COUNTS.length - 1 - idx;
-    const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+    const d = new Date(now.getUTCFullYear(), now.getUTCMonth() - monthsBack, 1);
     return {
       month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleDateString("en-US", { month: "short" }),
       placements: count,
     };
   });
 
-  const feesPerMonth: FeeStat[] = FEE_COUNTS.map((fees, idx) => {
-    const monthsBack = FEE_COUNTS.length - 1 - idx;
-    const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+  const commissionPerMonth: CommissionStat[] = COMMISSION_COUNTS.map((commission, idx) => {
+    const monthsBack = COMMISSION_COUNTS.length - 1 - idx;
+    const d = new Date(now.getUTCFullYear(), now.getUTCMonth() - monthsBack, 1);
     return {
       month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleDateString("en-US", { month: "short" }),
-      fees,
+      commission,
     };
   });
 
   const activeProviders = providers.filter((p) => p.status === "APPROVED").length;
-  const pendingVerifications = providers.filter((p) => p.status === "PENDING_VERIFICATION").length;
-
-  const totalContractValue = 8_450_000;
-  const totalPlatformFees = FEE_COUNTS.reduce((sum, v) => sum + v, 0);
+  const pendingVerifications = providers.filter(
+    (p) => p.status !== "APPROVED" && p.status !== "REJECTED" && p.status !== "SUSPENDED"
+  ).length;
 
   return {
     placementsPerMonth,
-    feesPerMonth,
-    totalContractValue,
-    totalPlatformFees,
+    commissionPerMonth,
+    totalContractValue: 8_450_000,
+    totalCommission: COMMISSION_COUNTS.reduce((sum, v) => sum + v, 0),
     activeProviders,
     pendingVerifications,
+    overduePeriods,
+    openDisputes,
   };
 }

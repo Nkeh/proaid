@@ -1,24 +1,46 @@
 "use client";
 
+import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useT, useLocale } from "@/lib/i18n";
 import { formatMoney } from "@/lib/format";
-import type { FeeStat, PlacementStat } from "@/lib/data/types";
+import type { CommissionStat, PlacementStat } from "@/lib/data/types";
 
-function PlacementsTooltip({ active, payload }: { active?: boolean; payload?: { payload: PlacementStat }[] }) {
+/** Renders the stored "YYYY-MM" key as a short month label in the active locale, instead of the seed's baked-in English label. */
+function localizedMonthLabel(month: string, locale: ReturnType<typeof useLocale>): string {
+  const [year, monthNum] = month.split("-").map(Number);
+  const date = new Date(year, monthNum - 1, 1);
+  const intlLocale = locale === "fr" ? "fr-FR" : "en-US";
+  return new Intl.DateTimeFormat(intlLocale, { month: "short" }).format(date);
+}
+
+function PlacementsTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { payload: PlacementStat & { label: string } }[];
+  label: (count: number) => string;
+}) {
   if (!active || !payload?.length) return null;
   const point = payload[0]!.payload;
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="font-semibold">{point.label}</p>
-      <p className="text-muted-foreground">{point.placements} placements</p>
+      <p className="text-muted-foreground">{label(point.placements)}</p>
     </div>
   );
 }
 
 export function PlacementsChart({ data }: { data: PlacementStat[] }) {
   const t = useT();
+  const locale = useLocale();
+  const localizedData = useMemo(
+    () => data.map((d) => ({ ...d, label: localizedMonthLabel(d.month, locale) })),
+    [data, locale]
+  );
   return (
     <Card>
       <CardHeader>
@@ -26,7 +48,7 @@ export function PlacementsChart({ data }: { data: PlacementStat[] }) {
       </CardHeader>
       <CardContent className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <BarChart data={localizedData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
             <XAxis
               dataKey="label"
@@ -41,7 +63,7 @@ export function PlacementsChart({ data }: { data: PlacementStat[] }) {
               tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
               width={36}
             />
-            <Tooltip content={<PlacementsTooltip />} cursor={{ fill: "var(--secondary)" }} />
+            <Tooltip content={<PlacementsTooltip label={t.admin.placementsTooltipLabel} />} cursor={{ fill: "var(--secondary)" }} />
             <Bar dataKey="placements" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={44} />
           </BarChart>
         </ResponsiveContainer>
@@ -50,17 +72,18 @@ export function PlacementsChart({ data }: { data: PlacementStat[] }) {
   );
 }
 
-function formatCompactXaf(value: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+function formatCompactXaf(value: number, locale: ReturnType<typeof useLocale>): string {
+  const intlLocale = locale === "fr" ? "fr-FR" : "en-US";
+  return new Intl.NumberFormat(intlLocale, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
-function FeesTooltip({
+function CommissionTooltip({
   active,
   payload,
   locale,
 }: {
   active?: boolean;
-  payload?: { payload: FeeStat }[];
+  payload?: { payload: CommissionStat & { label: string } }[];
   locale: ReturnType<typeof useLocale>;
 }) {
   if (!active || !payload?.length) return null;
@@ -68,22 +91,26 @@ function FeesTooltip({
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="font-semibold">{point.label}</p>
-      <p className="text-muted-foreground">{formatMoney(point.fees, locale)}</p>
+      <p className="text-muted-foreground">{formatMoney(point.commission, locale)}</p>
     </div>
   );
 }
 
-export function FeesChart({ data }: { data: FeeStat[] }) {
+export function CommissionChart({ data }: { data: CommissionStat[] }) {
   const t = useT();
   const locale = useLocale();
+  const localizedData = useMemo(
+    () => data.map((d) => ({ ...d, label: localizedMonthLabel(d.month, locale) })),
+    [data, locale]
+  );
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{t.admin.feesChartTitle}</CardTitle>
+        <CardTitle className="text-base">{t.admin.commissionChartTitle}</CardTitle>
       </CardHeader>
       <CardContent className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <BarChart data={localizedData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
             <XAxis
               dataKey="label"
@@ -95,11 +122,11 @@ export function FeesChart({ data }: { data: FeeStat[] }) {
               tickLine={false}
               axisLine={false}
               tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-              tickFormatter={formatCompactXaf}
+              tickFormatter={(value: number) => formatCompactXaf(value, locale)}
               width={44}
             />
-            <Tooltip content={<FeesTooltip locale={locale} />} cursor={{ fill: "var(--secondary)" }} />
-            <Bar dataKey="fees" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={44} />
+            <Tooltip content={<CommissionTooltip locale={locale} />} cursor={{ fill: "var(--secondary)" }} />
+            <Bar dataKey="commission" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={44} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

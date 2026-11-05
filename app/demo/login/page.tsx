@@ -15,15 +15,15 @@ import { ROLE_HOME, setRole } from "@/lib/data/session";
 export default function LoginPage() {
   const t = useT();
   const router = useRouter();
-  const [email, setEmail] = useState("esther.ngwa@example.com");
-  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("677889900");
+  const [otp, setOtp] = useState("123456");
 
   function loginAs(role: "EMPLOYER" | "PROVIDER" | "ADMIN") {
     setRole(role);
     router.push(ROLE_HOME[role]);
   }
 
-  function handleEmailLogin(e: React.FormEvent) {
+  function handlePhoneLogin(e: React.FormEvent) {
     e.preventDefault();
     loginAs("EMPLOYER");
   }
@@ -73,20 +73,28 @@ export default function LoginPage() {
             <Separator className="flex-1" />
           </div>
 
-          <form onSubmit={handleEmailLogin} className="space-y-3">
+          <form onSubmit={handlePhoneLogin} className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="email">{t.login.emailLabel}</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Label htmlFor="phone">{t.login.phoneLabel}</Label>
+              <Input
+                id="phone"
+                type="tel"
+                inputMode="numeric"
+                placeholder={t.login.phonePlaceholder}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 9))}
+                required
+              />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">{t.login.passwordLabel}</Label>
+              <Label htmlFor="otp">{t.login.otpLabel}</Label>
               <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                id="otp"
+                inputMode="numeric"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
               />
+              <p className="text-xs text-muted-foreground">{t.login.otpHint}</p>
             </div>
             <Button type="submit" className="h-11 w-full">
               {t.login.loginButton}

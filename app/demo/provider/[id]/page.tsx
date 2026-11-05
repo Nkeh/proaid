@@ -2,15 +2,17 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Star, Phone, CheckCircle2, Circle } from "lucide-react";
+import { Star, Phone, CheckCircle2, Circle, Heart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InitialsAvatar } from "@/components/brand/initials-avatar";
 import { useT, useLocale } from "@/lib/i18n";
-import { formatMoney, formatDate } from "@/lib/format";
-import { useProviderById } from "@/lib/data/providers";
+import { formatMoney, formatDate, firstNameLastInitial } from "@/lib/format";
+import { useProviderById, useShortlistedProviderIds, toggleShortlist } from "@/lib/data/providers";
 import { useRole } from "@/lib/data/session";
+import { cn } from "@/lib/utils";
+import type { VettingChecklist } from "@/lib/data/types";
 
 export default function ProviderProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +21,7 @@ export default function ProviderProfilePage() {
   const locale = useLocale();
   const role = useRole();
   const provider = useProviderById(id);
+  const shortlistedIds = useShortlistedProviderIds();
 
   if (!provider) {
     return (
@@ -28,17 +31,21 @@ export default function ProviderProfilePage() {
     );
   }
 
-  const verificationItems: { key: keyof typeof provider.verification; label: string }[] = [
-    { key: "idVerified", label: t.verification.idVerified },
-    { key: "referencesConfirmed", label: t.verification.referencesConfirmed },
-    { key: "medicalCertificate", label: t.verification.medicalCertificate },
-    { key: "skillsCheck", label: t.verification.skillsCheck },
+  const isShortlisted = shortlistedIds.includes(provider.id);
+
+  const vettingItems: { key: keyof VettingChecklist; label: string }[] = [
+    { key: "identityConfirmed", label: t.vetting.identityConfirmed },
+    { key: "criminalRecordClear", label: t.vetting.criminalRecordClear },
+    { key: "referee1Confirmed", label: t.vetting.referee1Confirmed },
+    { key: "referee2Confirmed", label: t.vetting.referee2Confirmed },
+    { key: "medicalFitness", label: t.vetting.medicalFitness },
+    { key: "skillsConfirmed", label: t.vetting.skillsConfirmed },
   ];
 
   const bio = locale === "fr" ? provider.bioFr : provider.bio;
   const skills = locale === "fr" ? provider.skillsFr : provider.skills;
 
-  function handleBook() {
+  function handleMakeOffer() {
     if (!role) {
       router.push("/demo/login");
       return;
@@ -53,15 +60,18 @@ export default function ProviderProfilePage() {
           <InitialsAvatar initials={provider.initials} color={provider.avatarColor} size="xl" />
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold">{provider.name}</h1>
+              <h1 className="text-2xl font-bold">{firstNameLastInitial(provider.name)}</h1>
               {provider.status === "APPROVED" && (
                 <Badge className="gap-1 border-primary/20 bg-primary/10 text-primary">
                   {t.providerCard.verifiedBadge}
                 </Badge>
               )}
+              {provider.availability === "ENGAGED" && (
+                <Badge variant="secondary">{t.providerCard.engagedBadge}</Badge>
+              )}
             </div>
             <p className="text-muted-foreground">
-              {t.categories[provider.category]} &middot; {t.neighbourhoods[provider.neighbourhood]}
+              {t.categories[provider.category]} &middot; {t.cities[provider.city]}, {t.neighbourhoods[provider.neighbourhood]}
             </p>
             <div className="mt-2 flex items-center gap-1">
               <Star className="h-4 w-4 fill-amber text-amber" />
@@ -87,12 +97,22 @@ export default function ProviderProfilePage() {
                 <p className="text-xs text-muted-foreground">
                   {provider.isPerJobRate ? t.common.perJob : t.common.perMonth}
                 </p>
-                <Button className="mt-4 h-11 w-full" onClick={handleBook}>
-                  {t.providerProfile.bookNow}
+                <Button className="mt-4 h-11 w-full" onClick={handleMakeOffer}>
+                  {t.providerProfile.makeOffer}
                 </Button>
+                {role === "EMPLOYER" && (
+                  <Button
+                    variant="outline"
+                    className="mt-2 h-11 w-full gap-2"
+                    onClick={() => toggleShortlist(provider.id)}
+                  >
+                    <Heart className={cn("h-4 w-4", isShortlisted && "fill-destructive text-destructive")} />
+                    {isShortlisted ? t.providerProfile.shortlistedButton : t.providerProfile.shortlistButton}
+                  </Button>
+                )}
                 <p className="mt-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
                   <Phone className="h-3.5 w-3.5" />
-                  {t.providerProfile.phoneHiddenNote}
+                  {t.providerProfile.contactMaskedNote}
                 </p>
               </CardContent>
             </Card>
@@ -100,6 +120,20 @@ export default function ProviderProfilePage() {
         </CardContent>
       </Card>
 
+      {!role && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="font-semibold">{t.providerProfile.loginPromptTitle}</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{t.providerProfile.loginPromptBody}</p>
+            <Button nativeButton={false} render={<Link href="/demo/login" />}>
+              {t.nav.login}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {role && (
+        <>
       <Card>
         <CardHeader>
           <CardTitle>{t.providerProfile.about}</CardTitle>
@@ -128,8 +162,8 @@ export default function ProviderProfilePage() {
             <CardTitle>{t.providerProfile.verificationTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {verificationItems.map((item) => {
-              const checked = provider.verification[item.key];
+            {vettingItems.map((item) => {
+              const checked = provider.vetting[item.key] === "PASS";
               return (
                 <div key={item.key} className="flex items-center gap-2 text-sm">
                   {checked ? (
@@ -173,6 +207,8 @@ export default function ProviderProfilePage() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       <Link href="/demo/search" className="inline-block text-sm font-medium text-primary hover:underline">
         &larr; {t.search.title}

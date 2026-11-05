@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { Provider } from "@/lib/data/types";
 import { useT, useLocale } from "@/lib/i18n";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, firstNameLastInitial } from "@/lib/format";
 
 export function ProviderCard({ provider }: { provider: Provider }) {
   const t = useT();
@@ -17,7 +17,7 @@ export function ProviderCard({ provider }: { provider: Provider }) {
         <InitialsAvatar initials={provider.initials} color={provider.avatarColor} size="lg" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="font-semibold break-words">{provider.name}</h3>
+            <h3 className="font-semibold break-words">{firstNameLastInitial(provider.name)}</h3>
             {provider.status === "APPROVED" && (
               <Badge variant="secondary" className="shrink-0 gap-1 border-primary/20 bg-primary/10 text-primary">
                 {t.providerCard.verifiedBadge}

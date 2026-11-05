@@ -1,12 +1,21 @@
-import { Check, X } from "lucide-react";
-import { BOOKING_LIFECYCLE_ORDER, type BookingStatus } from "@/lib/booking";
+import { Check, PauseCircle, X } from "lucide-react";
+import { LONG_CONTRACT_LIFECYCLE_ORDER, SHORT_JOB_LIFECYCLE_ORDER } from "@/lib/booking";
+import type { OfferContractStatus } from "@/src/domain/offerContract";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export function LifecycleTracker({ status }: { status: BookingStatus }) {
+const FAILURE_STATUSES: OfferContractStatus[] = ["CANCELLED", "TERMINATED", "CLOSED"];
+
+export function LifecycleTracker({
+  status,
+  isLongContract,
+}: {
+  status: OfferContractStatus;
+  isLongContract: boolean;
+}) {
   const t = useT();
 
-  if (status === "DECLINED" || status === "CANCELLED") {
+  if (FAILURE_STATUSES.includes(status)) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/15 text-destructive">
@@ -17,11 +26,23 @@ export function LifecycleTracker({ status }: { status: BookingStatus }) {
     );
   }
 
-  const currentIndex = BOOKING_LIFECYCLE_ORDER.indexOf(status);
+  if (status === "SUSPENDED") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber/20 text-amber-foreground">
+          <PauseCircle className="h-4 w-4" />
+        </span>
+        <p className="text-sm font-medium text-amber-foreground">{t.statusLabels.SUSPENDED}</p>
+      </div>
+    );
+  }
+
+  const order = isLongContract ? LONG_CONTRACT_LIFECYCLE_ORDER : SHORT_JOB_LIFECYCLE_ORDER;
+  const currentIndex = order.indexOf(status);
 
   return (
     <ol className="flex flex-col gap-0 sm:flex-row sm:items-start">
-      {BOOKING_LIFECYCLE_ORDER.map((step, index) => {
+      {order.map((step, index) => {
         const isComplete = index < currentIndex;
         const isCurrent = index === currentIndex;
         return (
@@ -37,12 +58,9 @@ export function LifecycleTracker({ status }: { status: BookingStatus }) {
               >
                 {isComplete ? <Check className="h-4 w-4" /> : index + 1}
               </span>
-              {index < BOOKING_LIFECYCLE_ORDER.length - 1 && (
+              {index < order.length - 1 && (
                 <span
-                  className={cn(
-                    "hidden h-0.5 flex-1 sm:block",
-                    isComplete ? "bg-primary" : "bg-border"
-                  )}
+                  className={cn("hidden h-0.5 flex-1 sm:block", isComplete ? "bg-primary" : "bg-border")}
                   style={{ minWidth: 24 }}
                 />
               )}
